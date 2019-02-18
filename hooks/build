@@ -3,7 +3,7 @@
 # $DOCKER_REPO and $DOCKER_TAG are injected into the build environment
 
 echo "hooks/build called with IMAGE_NAME=${DOCKER_REPO}:${DOCKER_TAG}, so we will run:"
-printenv
+#printenv
 
 case "${DOCKER_TAG}" in
 	smtp*)                bld_target=smtp ;;
