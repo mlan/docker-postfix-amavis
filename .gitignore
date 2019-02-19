@@ -1,4 +1,4 @@
 seed
 acme
-*.private
-local.*
+*private
+local*

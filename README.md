@@ -17,91 +17,144 @@ Brief feature list follows below
 - Simplified configuration of [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail) keys using environment variables
 - Simplified configuration of SMTP [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) using environment variables
 - Simplified generation of Diffie-Hellman parameters needed for [EDH](https://en.wikipedia.org/wiki/Diffie–Hellman_key_exchange) using utility script
-- Multi-staged build providing the images `full `, `auth` , `milter` and `smtp`
+- Multi-staged build providing the images `full`, `auth` , `milter` and `smtp`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
 - Built in utility script `mtaconf` helping configuring Postfix, AMaViS, SpamAssassin, ClamAV and OpenDKIM
 - Makefile which can build images and do some management and testing
 - Health check
 - Small image size based on [Alpine Linux](https://alpinelinux.org/)
+- Demo based on `docker-compose.yml` and `Makefile` files
 
 ## Tags
 
-The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag. The version part of the tag is `latest` or the revision number, e.g., `1.0.0`.
+The breaking.feature.fix [semantic versioning](https://semver.org/)
+used. In addition to the three number version number you can use two or
+one number versions numbers, which refers to the latest version of the 
+sub series. The tag `latest` references the build based on the latest commit to the repository.
 
-The build part of the tag is one of `full `, `auth` , `milter` and `smtp`. The image with the default tag `full` contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `auth` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `milter` include Postfix and the anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter). Finally the image `smtp` only contain Postfix.
+The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `auth` , `milter` or `smtp`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `auth` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `milter` include Postfix and the anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter). Finally the image `smtp` only contain Postfix.
 
 To exemplify the usage of the tags, lets assume that the latest version is `1.0.0`. In this case `latest`, `1.0.0`, `1.0`, `1`, `full`, `full-1.0.0`, `full-1.0` and `full-1` all identify the same image.
 
-## Usage
+# Usage
 
 Often you want to configure Postfix and its components. There are different methods available to achieve this. You can use the environment variables described below set in the shell before creating the container. These environment variables can also be explicitly given on the command line when creating the container. They can also be given in an `docker-compose.yml` file, see below. Moreover docker volumes or host directories with desired configuration files can be mounted in the container. And finally you can `exec` into a running container and modify configuration files directly.
 
-If you want to test the image you can start it using the destination domain `example.com` and mail boxes for info@example.com and abuse@example.com using the shell command below.
+If you want to test the image you can start it using the destination domain `example.com` and table mail boxes for info@example.com and abuse@example.com using the shell command below.
 
 ```bash
 docker run -d --name mail-mta --hostname mx1.example.com -e MAIL_BOXES="info@example.com abuse@example.com" -p 25:25 mlan/postfix-amavis
 ```
 
-### Docker compose example
+## Docker compose example
 
-An example of how to configure an mail server using docker compose is given below. It defines two services, `mail-mta`, and `auth`, which are the mail transfer agent and the LDAP mailbox lookup database respectively. In this example messages are delivered to a web mail application, which is not defined here. 
+An example of how to configure an web mail server using docker compose is given below. It defines 4 services, `mail-app`, `mail-mta`, `mail-db` and `auth`, which are the web mail server, the mail transfer agent, the SQL database and LDAP authentication respectively.
 
 ```yaml
 version: '3.7'
 
 services:
-  mail-mta:
-    image: mlan/postfix-amavis:1
-    restart: unless-stopped
-    hostname: ${MAIL_SRV-mx}.${MAIL_DOMAIN-docker.localhost}
+  mail-app:
+    image: mlan/kopano
     networks:
       - backend
     ports:
-      - "25:25"
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - auth
+      - mail-db
+      - mail-mta
+    environment:
+      - USER_PLUGIN=ldap
+      - LDAP_HOST=auth
+      - MYSQL_HOST=mail-db
+      - SMTP_SERVER=mail-mta
+      - LDAP_SEARCH_BASE=${LDAP_BASE-dc=example,dc=com}
+      - LDAP_USER_TYPE_ATTRIBUTE_VALUE=${LDAP_USEROBJ-posixAccount}
+      - LDAP_GROUP_TYPE_ATTRIBUTE_VALUE=${LDAP_GROUPOBJ-posixGroup}
+      - MYSQL_DATABASE=kopano
+      - MYSQL_USER=kopano
+      - MYSQL_PASSWORD=secret
+      - SYSLOG_LEVEL=3
+    volumes:
+      - mail-conf:/etc/kopano
+      - mail-atch:/var/lib/kopano/attachments
+      - mail-sync:/var/lib/z-push
+
+  mail-mta:
+    image: mlan/postfix-amavis
+    hostname: ${MAIL_SRV-mx}.${MAIL_DOMAIN-example.com}
+    networks:
+      - backend
+    ports:
+      - "127.0.0.1:25:25"
     depends_on:
       - auth
     environment:
       - MESSAGE_SIZE_LIMIT=${MESSAGE_SIZE_LIMIT-25600000}
       - LDAP_HOST=auth
       - VIRTUAL_TRANSPORT=lmtp:mail-app:2003
-      - SMTP_RELAY_HOSTAUTH=${SMTP_RELAY_HOSTAUTH}
+      - SMTP_RELAY_HOSTAUTH=${SMTP_RELAY_HOSTAUTH-}
       - SMTP_TLS_SECURITY_LEVEL=${SMTP_TLS_SECURITY_LEVEL-}
       - SMTP_TLS_WRAPPERMODE=${SMTP_TLS_WRAPPERMODE-no}
-      - LDAP_USER_BASE=${LDAP_USEROU},${LDAP_BASE}
-      - LDAP_QUERY_FILTER_USER=(&(kopanoAccount=1)(mail=%s))
-      - LDAP_QUERY_FILTER_ALIAS=(&(kopanoAccount=1)(kopanoAliases=%s))
+      - LDAP_USER_BASE=ou=${LDAP_USEROU-users},${LDAP_BASE-dc=example,dc=com}
+      - LDAP_QUERY_FILTER_USER=(&(objectclass=${LDAP_USEROBJ-posixAccount})(mail=%s))
       - DKIM_SELECTOR=${DKIM_SELECTOR-default}
       - SYSLOG_LEVEL=4
-    env_file:
-      - .init.env
     volumes:
       - mail-mta:/var
 
+  mail-db:
+    image: mariadb
+    command: ['--log_warnings=1']
+    networks:
+      - backend
+    environment:
+      - LANG=C.UTF-8
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD-secret}
+      - MYSQL_DATABASE=${MYSQL_DATABASE-kopano}
+      - MYSQL_USER=${MYSQL_USER-kopano}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
+    volumes:
+      - mail-db:/var/lib/mysql
+
   auth:
-    image: mlan/openldap:1
-    restart: unless-stopped
+    image: mlan/openldap
     networks:
       - backend
     environment:
       - LDAP_LOGLEVEL=parse
     volumes:
-      - auth-conf:/srv/conf
-      - auth-data:/srv/data
+      - auth-db:/srv
 
 networks:
   backend:
 
 volumes:
+  auth-db:
+  mail-conf:
+  mail-atch:
+  mail-db:
   mail-mta:
-  auth-conf:
-  auth-data:
-
+  mail-sync:
 ```
 
-### Environment variables
+This repository contains a `demo` directory which hold the `docker-compose.yml` file as well as a `Makefile` which might come handy. From within the `demo` directory you can start the container simply by typing:
 
-When you create the `mlan/postfix-amavis` container, you can configure the services by passing one or more environment variables or arguments on the docker run command line. Note that any pre-existing configuration files within the container will be updated.
+```bash
+make init
+```
+
+Then you can assess WebApp on the URL [`http://localhost:8080`](http://localhost:8080) and log in with the user name `demo` and password `demo` . You can send a test email by typing:
+
+```bash
+make test
+```
+
+## Environment variables
+
+When you create the `mlan/postfix-amavis` container, you can configure the services by passing one or more environment variables or arguments on the docker run command line. Note that any preexisting configuration files within the container will be updated.
 
 To see all available configuration variables you can run `postconf` within the container, for example like this:
 
@@ -111,7 +164,7 @@ docker exec -it mail-mta postconf
 
 If you do, you will notice that configuration variable names are all lower case, but they will be matched with all uppercase environment variables by the container entrypoint script.
 
-### Outgoing SMTP relay
+## Outgoing SMTP relay
 
 Sometimes you want outgoing email to be sent to a SMTP relay and _not_ directly to its destination. This could for instance be when your ISP is blocking port 25 or perhaps if you have a dynamic IP and are afraid of that mail servers will drop your outgoing emails because of that.
 
@@ -127,7 +180,7 @@ mail without TLS encryption, by setting `SMTP_TLS_SECURITY_LEVEL=encrypt`. Defau
 
 To configure the Postfix SMTP client connecting using the legacy SMTPS protocol instead of using the STARTTLS command, set `SMTP_TLS_WRAPPERMODE=yes`. This mode requires `SMTP_TLS_SECURITY_LEVEL=encrypt` or stronger. Default: `SMTP_TLS_WRAPPERMODE=no`
 
-### Incoming destination domain
+## Incoming destination domain
 
 Postfix is configured to be
 the final destination of the virtual/hosted domains defined by the environment variable `MAIL_DOMAIN`. If the domains are not properly configured Postfix will be rejecting the emails. At present there is _no_ support for multiple domains.
@@ -137,7 +190,7 @@ the final destination of the virtual/hosted domains defined by the environment v
 The default value of `MAIL_DOMAIN=$(hostname -d)` is to
 use the host name of the container minus the first component. So you can either use the environment variable `MAIL_DOMAIN` or the argument `--hostname`. So for example, `--hostname mx1.example.com` or `-e MAIL_DOMAIN=example.com`.
 
-### Incoming TLS support
+## Incoming TLS support
 
 Transport Layer Security (TLS, formerly called SSL) provides certificate-based authentication and encrypted sessions. An encrypted session protects the information that is transmitted with SMTP mail or with SASL authentication. 
 
@@ -179,17 +232,17 @@ docker run -d -name mail-mta -v proxy-acme:/acme:ro mlan/postfix-amavis
 
 Do not set `SMTPD_TLS_CERT_FILE` and/or `SMTPD_TLS_KEY_FILE` when using `ACME_FILE`.
 
-### Incoming anti-spam and anti-virus
+## Incoming anti-spam and anti-virus
 
 Amavisd-new is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or SpamAssassin. Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS blocklists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
 
 AMaViS will only insert mail headers in incoming messages with domain mentioned in `MAIL_DOMAIN`. So proper configuration is needed for anti-spam and anti-virus to work. 
 
-### Incoming SPF sender authentication
+## Incoming SPF sender authentication
 
 Sender Policy Framework (SPF) is an [email authentication](https://en.wikipedia.org/wiki/Email_authentication) method designed to detect forged sender addresses in emails. SPF allows the receiver to check that an email claiming to come from a specific domain comes from an IP address authorized by that domain's administrators. The list of authorized sending hosts and IP addresses for a domain is published in the [DNS](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions) records for that domain.
 
-### DKIM sender authentication
+## DKIM sender authentication
 
 Domain-Keys Identified Mail (DKIM) is an [email authentication](https://en.wikipedia.org/wiki/Email_authentication) method designed to detect forged sender addresses in emails. DKIM allows the receiver to check that an email claimed to have come from a specific [domain](https://en.wikipedia.org/wiki/Domain_name) was indeed authorized by the owner of that domain. It achieves this by affixing a [digital signature](https://en.wikipedia.org/wiki/Digital_signature), linked to a domain name, `MAIL_DOMAIN`, to each outgoing email message, which the receiver can verify by using the DKIM key published in the [DNS](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions) records for that domain.
 
@@ -220,7 +273,7 @@ Alternatively you can pass the private key using the `DKIMPRIVATE_KEY` variable.
 If you do, you can exclude the strings `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----`
 Example `DKIM_PRIVATEKEY="MIIEpAIBAAKCAQEA04up8hoqzS...1+APIB0RhjXyObwHQnOzhAk"`
 
-### Table mailbox lookup
+## Table mailbox lookup
 
 Postfix can use a table as a source for any of its lookups including virtual mailbox and aliases. The `mlan/postfix-amavis` image provides a simple way to generate virtual mailbox lookup using the `MAIL_BOXES` environment variable.
 
@@ -228,7 +281,7 @@ Postfix can use a table as a source for any of its lookups including virtual mai
 
 Using the `MAIL_BOXES` environment variable you simply provide a space separated list with all email addressees that Postfix should accept incoming mail to. For example: `MAIL_BOXES="info@example.com abuse@example.com"`. The default value is empty.
 
-### LDAP mailbox lookup
+## LDAP mailbox lookup
 
 Postfix can use an LDAP directory as a source for any of its lookups including virtual mailbox and aliases.
 
@@ -264,18 +317,18 @@ Example, only consider group mail from group who is of `objectclass=kopano-group
 The defaults for these environment variables are empty. If you do have to bind, do it with this distinguished name and password. Example: `LDAP_BIND_DN=uid=admin,dc=example,dc=com`, `LDAP_BIND_PW=secret`.
 
 
-### Delivery transport
+## Delivery transport
 The `mlan/postfix-amavis` image is designed primarily to work with a companion software which holds the mail boxes. That is, Postfix is not intended to be used for final delivery.
 
 #### `VIRTUAL_TRANSPORT`
 
 Postfix delivers the messages to the companion software, like [Kolab](https://hub.docker.com/r/kvaps/kolab), [Kopano](https://cloud.docker.com/u/mlan/repository/docker/mlan/kopano) or [Zimbra](https://hub.docker.com/r/jorgedlcruz/zimbra/), using a transport mechanism you specify using the environment variable `VIRTUAL_TRANSPORT`. LMTP is one such transport mechanism. One example of final delivery transport to Kopano is: `VIRTUAL_TRANSPORT=lmtp:app:2003`
 
-### Message size limit `MESSAGE_SIZE_LIMIT`
+## Message size limit `MESSAGE_SIZE_LIMIT`
 
 The maximal size in bytes of a message, including envelope information. Default: `MESSAGE_SIZE_LIMIT=10240000` ~10MB. Many mail servers are configured with maximal size of 10MB, 20MB or 25MB.
 
-### Logging `SYSLOG_LEVEL`
+## Logging `SYSLOG_LEVEL`
 
 The level of output for logging is in the range from 0 to 8. 0 means emergency logging only, 1 for alert messages, 2 for critical messages only, 3 for error or worse, 4 for warning or worse, 5 for notice or worse, 6 for info or worse, 7 debug. Default: `SYSLOG_LEVEL=4`
 
@@ -300,7 +353,7 @@ The TXT record specifies a list of authorized host names/IP addresses that mail 
 
 The public key DNS record should appear as a [TXT](https://en.wikipedia.org/wiki/TXT_Record) resource record at: `DKIM_SELECTOR._domainkey.DOMAIN`
 
-The data returned from the query of this record is also a list of tag-value pairs. It includes the domain's [public key](https://en.wikipedia.org/wiki/Public_key), along with other key usage tokens and flags as in this example: 
+The data returned from the query of this record is also a list of tag-value pairs. It includes the domain's [public key](https://en.wikipedia.org/wiki/Public_key), along with other key usage tokens and flags as in this example:
 
 ```
 "k=rsa; t=s; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDDmzRmJRQxLEuyYiyMg4suA2Sy
@@ -309,4 +362,3 @@ GfWdg7QkdN6kR4V75MFlw624VY35DaXBvnlTJTgRg/EW72O1DiYVThkyCgpSYS8nmEQIDAQAB"
 ```
 
 The receiver can use the public key (value of the p tag) to then decrypt the hash value in the header field, and at the same time recalculate the hash value for the mail message (headers and body) that was received.
-
