@@ -73,9 +73,9 @@ services:
       - LDAP_SEARCH_BASE=${LDAP_BASE-dc=example,dc=com}
       - LDAP_USER_TYPE_ATTRIBUTE_VALUE=${LDAP_USEROBJ-posixAccount}
       - LDAP_GROUP_TYPE_ATTRIBUTE_VALUE=${LDAP_GROUPOBJ-posixGroup}
-      - MYSQL_DATABASE=kopano
-      - MYSQL_USER=kopano
-      - MYSQL_PASSWORD=secret
+      - MYSQL_DATABASE=${MYSQL_DATABASE-kopano}
+      - MYSQL_USER=${MYSQL_USER-kopano}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
       - SYSLOG_LEVEL=3
     volumes:
       - mail-conf:/etc/kopano

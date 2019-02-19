@@ -1,3 +1,6 @@
+# 1.1.1
+- Make sure the .env settings are honored also for MYSQL
+
 # 1.1.0
 - Demo based on `docker-compose.yml` and `Makefile` files
 
