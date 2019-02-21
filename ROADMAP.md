@@ -1,8 +1,12 @@
-# Roadmap
+# Road map
 
-## Build test
+## Build tests
 
-add more build test and try to configure auto-test on docker hub.
+Add more build tests.
+
+Configure auto-test on docker hub
+
+Configure build test on travis.
 
 ## AMaViS configuration
 
@@ -14,9 +18,9 @@ $final_spam_destiny       = D_PASS;
 
 ## OpenDMARK
 
-include in build target `auth` in Dockerfile
+Include in build target `auth` in Dockerfile
 
-add configuration function in entrypoint.sh
+Add configuration function in entrypoint.sh
 
 ## Logging
 
@@ -24,7 +28,7 @@ ClamAV and FreshClam is writing some messages to stdout
 
 ## Support multiple domains
 
-requires modifications to configurations of Postfix, AMaViS and OpenDKIM, see https://forum.iredmail.org/topic10160-iredmail-support-multiple-domains-setup-issues-with-dkim-keys-amavisd-etc.html and https://blog.tinned-software.net/setup-postfix-for-multiple-domains/.
+Requires modifications to configurations of Postfix, AMaViS and OpenDKIM, see https://forum.iredmail.org/topic10160-iredmail-support-multiple-domains-setup-issues-with-dkim-keys-amavisd-etc.html and https://blog.tinned-software.net/setup-postfix-for-multiple-domains/.
 
 ## Directory structures
 
