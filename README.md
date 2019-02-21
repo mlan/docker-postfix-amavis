@@ -1,5 +1,10 @@
 # The `mlan/postfix-amavis` repository
 
+![docker build](https://img.shields.io/docker/build/mlan/postfix-amavis.svg?label=build&style=popout-square&logo=docker)
+![MicroBadger Size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
+![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=popout-square&logo=docker)
+![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=popout-square&logo=docker)
+
 This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](https://en.wikipedia.org/wiki/Message_transfer_agent) (SMTP) service using [Postfix](http://www.postfix.org/) with [anti-spam](https://en.wikipedia.org/wiki/Anti-spam_techniques) and anti-virus filter using [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [ClamAV](https://www.clamav.net/), as well as sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [OpenDKim](http://opendkim.org/).
 
 ## Features
@@ -33,7 +38,7 @@ used. In addition to the three number version number you can use two or
 one number versions numbers, which refers to the latest version of the 
 sub series. The tag `latest` references the build based on the latest commit to the repository.
 
-The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `auth` , `milter` or `smtp`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `auth` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `milter` include Postfix and the anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter). Finally the image `smtp` only contain Postfix.
+The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `auth` , `milter` or `smtp`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `auth` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `milter` include Postfix and the anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter). Finally the image `smtp` only contain Postfix.
 
 To exemplify the usage of the tags, lets assume that the latest version is `1.0.0`. In this case `latest`, `1.0.0`, `1.0`, `1`, `full`, `full-1.0.0`, `full-1.0` and `full-1` all identify the same image.
 
