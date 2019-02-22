@@ -1,6 +1,5 @@
 # The `mlan/postfix-amavis` repository
 
-![docker build](https://img.shields.io/docker/build/mlan/postfix-amavis.svg?label=build&style=popout-square&logo=docker)
 ![MicroBadger Size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
 ![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=popout-square&logo=docker)
 ![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=popout-square&logo=docker)
