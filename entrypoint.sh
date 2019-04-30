@@ -11,6 +11,13 @@ postfix_ldap_users_cf=${postfix_ldap_users_cf-/etc/postfix/ldap-users.cf}
 postfix_ldap_alias_cf=${postfix_ldap_alias_cf-/etc/postfix/ldap-aliases.cf}
 postfix_ldap_groups_cf=${postfix_ldap_groups_cf-/etc/postfix/ldap-groups.cf}
 postfix_ldap_expand_cf=${postfix_ldap_expand_cf-/etc/postfix/ldap-groups-expand.cf}
+amavis_cf=${amavis_cf-/etc/amavisd.conf}
+
+#
+# define environment variables
+#
+
+amavis_var="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BAD_HEADER_DESTINY"
 
 #
 # usage
@@ -18,7 +25,7 @@ postfix_ldap_expand_cf=${postfix_ldap_expand_cf-/etc/postfix/ldap-groups-expand.
 
 usage() { echo "
 USAGE
-	mta COMMAND FILE [command-options]
+	mtaconf COMMAND FILE [command-options]
 
 COMMAND
 	modify <file> <parameter statement>
@@ -384,6 +391,11 @@ mtaupdate_cert() {
 		mkdir -p $SMTPD_TLS_DIR $ACME_TLS_DIR $runit_dir
 		cat <<-! > $runit_dir/run
 			#!/bin/bash -e
+			
+			# redirect stdout/stderr to syslog
+			exec 1> >(logger -p mail.info)
+			exec 2> >(logger -p mail.notice)
+			
 			dump() {
 			  dumpcerts.sh $ACME_FILE $ACME_TLS_DIR
 			}
@@ -422,6 +434,18 @@ postconf_edh() {
 	fi
 }
 
+_amavis_envvar() {
+	# allow amavis parameters to be modified using environment variables
+	local env_var="$1"
+	local lcase_var="$2"
+	local env_val
+	if [ -z "${amavis_var##*$env_var*}" ]; then
+		env_val="$(eval echo \$$env_var)"
+		inform 0 "Setting amavis parameter $lcase_var = $env_val"
+		modify $amavis_cf '\$'$lcase_var = "$env_val;"
+	fi
+}
+
 postconf_envvar() {
 	# some postfix parameters start with a digit and may contain dash "-"
 	# and so are not legal variable names
@@ -434,6 +458,7 @@ postconf_envvar() {
 			inform 0 "Setting postfix parameter $lcase_var = $env_val"
 			postconf $lcase_var="$env_val"
 		fi
+		_amavis_envvar $env_var $lcase_var
 	done
 }
 

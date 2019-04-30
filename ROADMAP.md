@@ -8,23 +8,11 @@ Configure auto-test on docker hub
 
 Configure build test on travis.
 
-## AMaViS configuration
-
-### support modifying what happens to spam
-
-```
-$final_spam_destiny       = D_PASS;
-```
-
 ## OpenDMARK
 
 Include in build target `auth` in Dockerfile
 
 Add configuration function in entrypoint.sh
-
-## Logging
-
-ClamAV and FreshClam is writing some messages to stdout
 
 ## Support multiple domains
 

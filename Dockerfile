@@ -1,5 +1,5 @@
 ARG	DIST=alpine
-ARG	REL=3.8
+ARG	REL=latest
 
 
 #
@@ -95,7 +95,7 @@ RUN	apk --no-cache --update add \
 	&& setup-runit.sh \
 	"amavisd foreground" \
 	"freshclam -d --quiet" \
-	clamd \
+	"-q clamd" \
 	&& addgroup clamav amavis && addgroup amavis clamav \
 	&& ln -sf /var/amavis/.spamassassin /root/.spamassassin \
 	&& cp /etc/amavisd.conf /etc/amavisd.conf.dist \
@@ -108,8 +108,10 @@ RUN	apk --no-cache --update add \
 	&& mtaconf modify /etc/clamav/clamd.conf Foreground yes \
 	&& mtaconf modify /etc/clamav/clamd.conf LogSyslog yes \
 	&& mtaconf modify /etc/clamav/clamd.conf LogFacility LOG_MAIL \
+	&& mtaconf comment /etc/clamav/clamd.conf LogFile \
 	&& mtaconf modify /etc/clamav/freshclam.conf Foreground yes \
 	&& mtaconf modify /etc/clamav/freshclam.conf LogSyslog yes \
+	&& mtaconf comment /etc/clamav/freshclam.conf UpdateLogFile \
 	&& mtaconf modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL
 
 #
