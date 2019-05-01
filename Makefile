@@ -7,9 +7,14 @@ IMG_VER  ?= latest
 IMG_CMD  ?= /bin/bash
 
 TST_PORT ?= 25
-CNT_NAME ?= postfix-amavis-default
-CNT_PORT ?= -p $(TST_PORT):25
-CNT_ENV  ?= --hostname mx1.example.com -e MAIL_BOXES="info@example.com abuse@example.com"
+TST_DOM  ?= example.com
+TST_FROM ?= sender@$(TST_DOM)
+TST_TO   ?= receiver@$(TST_DOM)
+TST_HOST ?= mx.$(TST_DOM)
+
+CNT_NAME ?= postfix-amavis-mta
+CNT_PORT ?= -p 127.0.0.1:$(TST_PORT):25
+CNT_ENV  ?= --hostname $(TST_HOST) -e MAIL_BOXES="$(TST_FROM) $(TST_TO)"
 CNT_VOL  ?=
 CNT_DRV  ?=
 CNT_IP    = $(shell docker inspect -f \
@@ -17,8 +22,6 @@ CNT_IP    = $(shell docker inspect -f \
 	$(1) | head -n1)
 
 TST_DK_S ?= default
-TST_FROM ?= info@example.com
-TST_TO   ?= abuse@example.com
 TST_WAIT ?= 9
 
 .PHONY: build build-all build-smtp build-milter build-auth build-full \
@@ -60,7 +63,7 @@ run:
 	docker run --rm -d --name $(CNT_NAME) $(CNT_PORT) $(CNT_VOL) $(CNT_DRV) $(CNT_ENV) $(IMG_REPO)\:$(IMG_VER)
 
 create:
-	docker create  --name $(CNT_NAME) $(CNT_PORT) $(CNT_VOL) $(CNT_DRV) $(CNT_ENV) $(IMG_REPO)\:$(IMG_VER)
+	docker create --name $(CNT_NAME) $(CNT_PORT) $(CNT_VOL) $(CNT_DRV) $(CNT_ENV) $(IMG_REPO)\:$(IMG_VER)
 
 logs:
 	docker container logs $(CNT_NAME)
@@ -119,3 +122,14 @@ test2:
 
 test3:
 	cat test/spam-email.txt | nc -C localhost 25
+
+test4:
+	docker run --rm -d --name $(CNT_NAME) $(CNT_PORT) $(CNT_ENV) -e SYSLOG_LEVEL=7 $(IMG_REPO)\:$(IMG_VER)-smtp
+	docker run --rm -d --name postfix-amavis-test4 --hostname test4.$(TST_DOM) \
+		--link $(CNT_NAME):mta -e RELAYHOST=[mta] -e SYSLOG_LEVEL=7 \
+		-e INET_INTERFACES=loopback-only -e MYDESTINATION= \
+		$(IMG_REPO):$(IMG_VER)-smtp
+	sleep 60
+	printf "subject:Test4\nfrom:$(TST_FROM)\nTest4\n" | tee /dev/tty \
+	| docker exec postfix-amavis-test4 sendmail $(TST_TO)
+	# docker stop postfix-amavis-test4

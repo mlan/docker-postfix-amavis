@@ -83,7 +83,7 @@ define_formats() {
 inform() {
 	local status=$1
 	shift
-	if [ "$status" == "-1" -a -n "${VERBOSE+x}" ]; then
+	if ([ "$status" = "-1" ] && [ -n "${VERBOSE+x}" ]); then
 		status="0"
 	fi
 	case $status in
@@ -363,6 +363,7 @@ postconf_mbox() {
 		postconf virtual_mailbox_domains='$mydomain'
 		postconf alias_maps=
 		postconf virtual_mailbox_maps=hash:$postfix_virt_mailbox
+		postconf virtual_mailbox_base=/var/mail
 		postmap hash:$postfix_virt_mailbox
 	fi
 }
@@ -378,7 +379,7 @@ mtaupdate_cert() {
 	# we are potentially updating $SMTPD_TLS_CERT_FILE and $SMTPD_TLS_KEY_FILE
 	# here so we need to run this func before postconf_tls and postconf_envvar
 	ACME_FILE=${ACME_FILE-/acme/acme.json}
-	if [ -x $(which dumpcerts.sh) -a -f $ACME_FILE ]; then
+	if ([ -x $(which dumpcerts.sh) ] && [ -f $ACME_FILE ]); then
 		inform 0 "Configuring acme-tls"
 		HOSTNAME=${HOSTNAME-$(hostname)}
 		ACME_TLS_DIR=${ACME_TLS_DIR-/tmp/ssl}
@@ -452,8 +453,8 @@ postconf_envvar() {
 	local env_vars="$(export -p | sed -r 's/export ([^=]+).*/\1/g')"
 	local lcase_var env_val
 	for env_var in $env_vars; do
-		lcase_var="$(echo $env_var | sed 's/\(.*\)/\L\1/')"
-		if [ "$(postconf -H $lcase_var 2>/dev/null)" == "$lcase_var" ]; then
+		lcase_var="$(echo $env_var | tr '[:upper:]' '[:lower:]')"
+		if [ "$(postconf -H $lcase_var 2>/dev/null)" = "$lcase_var" ]; then
 			env_val="$(eval echo \$$env_var)"
 			inform 0 "Setting postfix parameter $lcase_var = $env_val"
 			postconf $lcase_var="$env_val"
