@@ -7,6 +7,8 @@
 docker_build_runit_root=${docker_build_runit_root-/etc/service}
 postfix_sasl_passwd=${postfix_sasl_passwd-/etc/postfix/sasl-passwords}
 postfix_virt_mailbox=${postfix_virt_mailbox-/etc/postfix/virt-users}
+postfix_virt_mailroot=${postfix_virt_mailroot-/var/mail}
+postfix_virt_mailuser=${postfix_virt_mailuser-postfix}
 postfix_ldap_users_cf=${postfix_ldap_users_cf-/etc/postfix/ldap-users.cf}
 postfix_ldap_alias_cf=${postfix_ldap_alias_cf-/etc/postfix/ldap-aliases.cf}
 postfix_ldap_groups_cf=${postfix_ldap_groups_cf-/etc/postfix/ldap-groups.cf}
@@ -358,12 +360,16 @@ postconf_mbox() {
 		inform 0 "Configuring postfix-virt-mailboxes"
 		for email in $emails; do
 			echo $email ${email#*@}/${email%@*} >> $postfix_virt_mailbox
+			mkdir -m 777 -p $postfix_virt_mailroot/${email#*@}
 		done
+		chown $postfix_virt_mailuser: $postfix_virt_mailroot
+		postconf alias_maps=
 		postconf alias_database=
 		postconf virtual_mailbox_domains='$mydomain'
-		postconf alias_maps=
+		postconf virtual_mailbox_base=$postfix_virt_mailroot
+		postconf virtual_uid_maps=static:$(id -u $postfix_virt_mailuser)
+		postconf virtual_gid_maps=static:$(id -g $postfix_virt_mailuser)
 		postconf virtual_mailbox_maps=hash:$postfix_virt_mailbox
-		postconf virtual_mailbox_base=/var/mail
 		postmap hash:$postfix_virt_mailbox
 	fi
 }

@@ -4,13 +4,18 @@ BLD_ARG  ?= --build-arg DIST=alpine --build-arg REL=latest
 
 IMG_REPO ?= mlan/postfix-amavis
 IMG_VER  ?= latest
-IMG_CMD  ?= /bin/bash
+IMG_CMD  ?= /bin/sh
 
 TST_PORT ?= 25
-TST_DOM  ?= example.com
+TST_DOM  ?= example.lan
 TST_FROM ?= sender@$(TST_DOM)
 TST_TO   ?= receiver@$(TST_DOM)
 TST_HOST ?= mx.$(TST_DOM)
+TST_NET  ?= mta-net
+TST_CLT  ?= mta-client
+TST_SRV  ?= mta-server
+TST_ENV  ?= --network $(TST_NET) -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=7
+TST_MSG  ?= TeStMeSsAgE
 
 CNT_NAME ?= postfix-amavis-mta
 CNT_PORT ?= -p 127.0.0.1:$(TST_PORT):25
@@ -22,7 +27,9 @@ CNT_IP    = $(shell docker inspect -f \
 	$(1) | head -n1)
 
 TST_DK_S ?= default
-TST_WAIT ?= 9
+TST_W8S  ?= 1
+TST_W8M  ?= 20
+TST_W8L  ?= 60
 
 .PHONY: build build-all build-smtp build-milter build-auth build-full \
 	run run-fg start stop create purge rm-container rm-image cmd diff logs \
@@ -107,10 +114,16 @@ dkim_import:
 dkim_test:
 	docker exec -it $(CNT_NAME) opendkim-testkey -vvv
 
-testall: test1
+testall: test4 test5
 
-testwait:
-	sleep $(TST_WAIT)
+test_wait_s:
+	sleep $(TST_W8S)
+
+test_wait_m:
+	sleep $(TST_W8M)
+
+test_wait_l:
+	sleep $(TST_W8L)
 
 test1:
 	test/test-smtp.sh $(call CNT_IP,$(CNT_NAME)) $(TST_PORT) $(TST_FROM) $(TST_TO) \
@@ -123,13 +136,55 @@ test2:
 test3:
 	cat test/spam-email.txt | nc -C localhost 25
 
-test4:
-	docker run --rm -d --name $(CNT_NAME) $(CNT_PORT) $(CNT_ENV) -e SYSLOG_LEVEL=7 $(IMG_REPO)\:$(IMG_VER)-smtp
-	docker run --rm -d --name postfix-amavis-test4 --hostname test4.$(TST_DOM) \
-		--link $(CNT_NAME):mta -e RELAYHOST=[mta] -e SYSLOG_LEVEL=7 \
-		-e INET_INTERFACES=loopback-only -e MYDESTINATION= \
+test4: test4_up test_wait_m test_mail_s test_down
+
+test5: test5_up test_wait_l test_mail_m test_down
+
+test4_up:
+	docker network create $(TST_NET)
+	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
 		$(IMG_REPO):$(IMG_VER)-smtp
-	sleep 60
-	printf "subject:Test4\nfrom:$(TST_FROM)\nTest4\n" | tee /dev/tty \
-	| docker exec postfix-amavis-test4 sendmail $(TST_TO)
-	# docker stop postfix-amavis-test4
+	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e MYDESTINATION= \
+		$(IMG_REPO):$(IMG_VER)-smtp
+
+test5_up:
+	docker network create $(TST_NET)
+	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
+		$(IMG_REPO):$(IMG_VER)-milter
+	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e MYDESTINATION= \
+		$(IMG_REPO):$(IMG_VER)-milter
+
+test_mail_s: test_sendmail test_wait_s test_grepmail
+
+test_mail_m: test_sendmail test_wait_m test_grepmail
+
+test_sendmail:
+	printf "subject:Test\nfrom:$(TST_FROM)\n$(TST_MSG)\n" \
+	| docker exec -i $(TST_CLT) sendmail $(TST_TO)
+
+test_grepmail:
+	docker exec -it $(TST_SRV) cat /var/mail/$(TST_DOM)/receiver \
+	| grep ^$(TST_MSG)
+
+test_down:
+	docker stop $(TST_CLT) $(TST_SRV)
+	docker network rm $(TST_NET)
+
+test_cli_logs:
+	docker container logs $(TST_CLT)
+
+test_srv_logs:
+	docker container logs $(TST_SRV)
+
+test_cli_cmd:
+	docker exec -it $(TST_CLI) /bin/sh
+
+test_srv_cmd:
+	docker exec -it $(TST_SRV) /bin/sh
+
