@@ -16,6 +16,14 @@ TST_CLT  ?= mta-client
 TST_SRV  ?= mta-server
 TST_ENV  ?= --network $(TST_NET) -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=7
 TST_MSG  ?= TeStMeSsAgE
+TST_KEY  ?= local_priv_key.pem
+TST_CRT  ?= local_ca_cert.pem
+TST_PKEY ?= /etc/postfix/priv.pem
+TST_PCRT ?= /etc/postfix/cert.pem
+TST_USR1 ?= client1
+TST_PWD1 ?= password1
+TST_USR2 ?= client2
+TST_PWD2 ?= password2
 
 CNT_NAME ?= postfix-amavis-mta
 CNT_PORT ?= -p 127.0.0.1:$(TST_PORT):25
@@ -39,10 +47,13 @@ TST_W8L  ?= 60
 build: Dockerfile
 	docker build $(BLD_ARG) --target full -t $(IMG_REPO)\:$(IMG_VER) .
 
-build-all: build-smtp build-milter build-auth build-full
+build-all: build-smtp build-sasl build-milter build-auth build-full
 
 build-smtp: Dockerfile
 	docker build $(BLD_ARG) --target smtp -t $(IMG_REPO)\:$(IMG_VER)-smtp .
+
+build-sasl: Dockerfile
+	docker build $(BLD_ARG) --target sasl -t $(IMG_REPO)\:$(IMG_VER)-sasl .
 
 build-milter: Dockerfile
 	docker build $(BLD_ARG) --target milter -t $(IMG_REPO)\:$(IMG_VER)-milter .
@@ -140,7 +151,10 @@ test4: test4_up test_wait_m test_mail_s test_down
 
 test5: test5_up test_wait_l test_mail_m test_down
 
+test6: test6_up test_wait_m test_mail_s test_down
+
 test4_up:
+	# test basic smtp function
 	docker network create $(TST_NET)
 	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
 		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
@@ -151,6 +165,7 @@ test4_up:
 		$(IMG_REPO):$(IMG_VER)-smtp
 
 test5_up:
+	# test basic milter function
 	docker network create $(TST_NET)
 	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
 		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
@@ -160,9 +175,42 @@ test5_up:
 		-e MYDESTINATION= \
 		$(IMG_REPO):$(IMG_VER)-milter
 
+test6_up:
+	# test tls
+	docker network create $(TST_NET)
+	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
+		-e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT) \
+		$(IMG_REPO):$(IMG_VER)-smtp
+	docker cp $(TST_KEY) $(TST_SRV):$(TST_PKEY)
+	docker cp $(TST_CRT) $(TST_SRV):$(TST_PCRT)
+	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
+		$(IMG_REPO):$(IMG_VER)-smtp
+
+test7_up:
+	# test sasl
+	docker network create $(TST_NET)
+	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
+		-e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT) \
+		-e SMTPD_SASL_CLIENTAUTH="$(TST_USR1):{plain}$(TST_PWD1) $(TST_USR2):{plain}$(TST_PWD2)" \
+		$(IMG_REPO):$(IMG_VER)-sasl
+	docker cp $(TST_KEY) $(TST_SRV):$(TST_PKEY)
+	docker cp $(TST_CRT) $(TST_SRV):$(TST_PCRT)
+	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+		-e SMTP_RELAY_HOSTAUTH="[$(TST_SRV)]:587 $(TST_USR2):$(TST_PWD2)" \
+		-e INET_INTERFACES=loopback-only \
+		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=may \
+		$(IMG_REPO):$(IMG_VER)-sasl
+
 test_mail_s: test_sendmail test_wait_s test_grepmail
 
 test_mail_m: test_sendmail test_wait_m test_grepmail
+
+test_dovecot_auth:
+	docker exec -it $(TST_SRV) doveadm auth lookup $(TST_USR2)
 
 test_sendmail:
 	printf "subject:Test\nfrom:$(TST_FROM)\n$(TST_MSG)\n" \
@@ -172,18 +220,26 @@ test_grepmail:
 	docker exec -it $(TST_SRV) cat /var/mail/$(TST_DOM)/receiver \
 	| grep ^$(TST_MSG)
 
+test_genpem:
+	openssl genrsa -out $(TST_KEY)
+	openssl req -x509 -utf8 -new -batch \
+		-subj "/CN=$(TST_SRV)" -key $(TST_KEY) -out $(TST_CRT)
+
+test_rmpem:
+	rm $(TST_KEY) $(TST_CRT)
+
 test_down:
 	docker stop $(TST_CLT) $(TST_SRV)
 	docker network rm $(TST_NET)
 
-test_cli_logs:
+test_clt_logs:
 	docker container logs $(TST_CLT)
 
 test_srv_logs:
 	docker container logs $(TST_SRV)
 
-test_cli_cmd:
-	docker exec -it $(TST_CLI) /bin/sh
+test_clt_cmd:
+	docker exec -it $(TST_CLT) /bin/sh
 
 test_srv_cmd:
 	docker exec -it $(TST_SRV) /bin/sh

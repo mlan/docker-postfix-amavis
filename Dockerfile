@@ -64,13 +64,32 @@ ENTRYPOINT ["entrypoint.sh"]
 
 #
 #
+# target: sasl
+#
+# add dovecot to alow client auth
+#
+#
+
+FROM	smtp AS sasl
+
+#
+# Install
+#
+
+RUN	apk --no-cache --update add dovecot \
+	&& setup-runit.sh "dovecot -F" \
+	&& mtaconf modify_dovecot_conf
+
+
+#
+#
 # target: milter
 #
 # add anti-spam and anti-virus mail filters
 #
 #
 
-FROM	smtp AS milter
+FROM	sasl AS milter
 
 #
 # Install
@@ -114,11 +133,12 @@ RUN	apk --no-cache --update add \
 	&& mtaconf comment /etc/clamav/freshclam.conf UpdateLogFile \
 	&& mtaconf modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL
 
+
 #
 #
 # target: auth
 #
-# add spf and opendkim
+# add spf and opendkim 
 #
 #
 
@@ -149,6 +169,7 @@ RUN	apk --no-cache --update add \
 	&& mtaconf addafter /etc/opendkim/opendkim.conf UserID "UMask\t\t\t0111" \
 	&& opendkim-genkey -D /var/db/dkim && chown -R opendkim:opendkim /var/db/dkim
 
+
 #
 #
 # target: full
@@ -157,7 +178,7 @@ RUN	apk --no-cache --update add \
 #
 #
 
-FROM	auth AS full
+FROM	milter AS full
 
 #
 # Install

@@ -341,6 +341,12 @@ Postfix delivers the messages to the companion software, like [Kolab](https://hu
 
 The maximal size in bytes of a message, including envelope information. Default: `MESSAGE_SIZE_LIMIT=10240000` ~10MB. Many mail servers are configured with maximal size of 10MB, 20MB or 25MB.
 
+## SMTP Client Authentication
+
+Sometimes want to authenticate SMTP client connecting to the submission port 578.
+
+`SMTPD_SASL_CLIENTAUTH="client1:{plain}password1 client2:{plain}password2"`
+
 ## Logging `SYSLOG_LEVEL`
 
 The level of output for logging is in the range from 0 to 8. 0 means emergency logging only, 1 for alert messages, 2 for critical messages only, 3 for error or worse, 4 for warning or worse, 5 for notice or worse, 6 for info or worse, 7 debug. Default: `SYSLOG_LEVEL=4`

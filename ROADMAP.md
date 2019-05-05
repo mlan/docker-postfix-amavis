@@ -2,8 +2,6 @@
 
 ## Build tests
 
-Add more build tests.
-
 Configure auto-test on docker hub
 
 Configure build test on travis.

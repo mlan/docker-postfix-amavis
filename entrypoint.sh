@@ -14,6 +14,8 @@ postfix_ldap_alias_cf=${postfix_ldap_alias_cf-/etc/postfix/ldap-aliases.cf}
 postfix_ldap_groups_cf=${postfix_ldap_groups_cf-/etc/postfix/ldap-groups.cf}
 postfix_ldap_expand_cf=${postfix_ldap_expand_cf-/etc/postfix/ldap-groups-expand.cf}
 amavis_cf=${amavis_cf-/etc/amavisd.conf}
+dovecot_users=${dovecot_users-/etc/dovecot/users}
+dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
 
 #
 # define environment variables
@@ -185,6 +187,52 @@ postconf_relay() {
 	else
 		inform 0 "No SMTP relay defined"
 	fi
+}
+
+postconf_dovecot() {
+	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
+	# dovecot need to be installed
+	if (apk info dovecot &>/dev/null && [ -n "$clientauth" ]); then
+		inform 0 "Enabling client SASL via submission"
+		# create client passwd file used for autentication
+		for passwd in $clientauth; do
+			echo $passwd >> $dovecot_users
+		done
+		# enable sasl auth on the submission port
+		postconf -e smtp_sasl_security_options=noanonymous
+		postconf -e smtpd_sasl_auth_enable=yes
+		postconf -M "submission/inet=submission inet n - n - - smtpd"
+		postconf -P "submission/inet/smtpd_sasl_auth_enable=yes"
+		postconf -P "submission/inet/smtpd_sasl_type=dovecot"
+		postconf -P "submission/inet/smtpd_sasl_path=private/auth"
+		postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
+		postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
+		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
+	fi
+}
+
+modify_dovecot_conf() {
+	# configure dovecot to use passwd-file
+	cat <<-!cat >> ${1-$dovecot_cf}
+		ssl = no
+		disable_plaintext_auth = no
+		auth_mechanisms = plain login
+		passdb { 
+			driver = passwd-file
+			args = ${2-$dovecot_users}
+		}
+		userdb {
+			driver = static
+			args = uid=500 gid=500 home=/home/%u
+		}
+		service auth {
+			unix_listener /var/spool/postfix/private/auth {
+				mode  = 0660
+				user  = $postfix_virt_mailuser
+				group = $postfix_virt_mailuser
+			}
+		}
+	!cat
 }
 
 postconf_amavis() {
@@ -417,7 +465,7 @@ mtaupdate_cert() {
 }
 
 postconf_tls() {
-	if [ -n "$SMTPD_TLS_CERT_FILE" -o -n "$SMTPD_TLS_ECCERT_FILE" ]; then
+	if ([ -n "$SMTPD_TLS_CERT_FILE" ] || [ -n "$SMTPD_TLS_ECCERT_FILE" ]); then
 		inform 0 "Activating incoming tls"
 		postconf -e smtpd_use_tls=yes
 	fi
@@ -531,6 +579,7 @@ mtaconf_opendkim
 postconf_spf
 mtaupdate_cert
 postconf_tls
+postconf_dovecot
 postconf_envvar
 
 #
