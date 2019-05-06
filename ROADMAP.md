@@ -4,8 +4,6 @@
 
 Configure auto-test on docker hub
 
-Configure build test on travis.
-
 ## OpenDMARK
 
 Include in build target `auth` in Dockerfile

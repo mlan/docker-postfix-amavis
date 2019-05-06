@@ -1,7 +1,9 @@
 # 1.2.0
+- Supports SMTP client SASL authentication using Dovecot
 - AMaViS configuration is now possible using environment variables
 - Now all ClamAV logs are redirected as intended
-- Supports SMTP client SASL authentication using Dovecot
+- Using alpine:latest since bug 9987 was resolved
+- Configured tests run on Travis CI.
 
 # 1.1.1
 - Make sure the .env settings are honored also for MYSQL

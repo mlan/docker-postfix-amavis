@@ -32,16 +32,21 @@ COPY sa-learn.sh /usr/local/bin/.
 # i.e., containers on the same network.
 #
 
-RUN	apk --no-cache --update add \
+RUN	apk --update add \
 	runit \
 	postfix \
 	postfix-ldap \
+	&& if [ -n "$(apk search -x cyrus-sasl-plain)" ]; then apk add \
+	cyrus-sasl-plain \
+	cyrus-sasl-login \
+	; fi \
 	&& ln -s /usr/local/bin/entrypoint.sh /usr/local/bin/mtaconf \
 	&& setup-runit.sh \
 	"syslogd -n -O /dev/stdout -l $SYSLOG_LEVEL" \
 	"crond -f -c /etc/crontabs" \
 	"postfix start-fg" \
-	&& postconf -e mynetworks_style=subnet
+	&& postconf -e mynetworks_style=subnet \
+	&& rm -rf /var/cache/apk/*
 
 #
 # state standard smtp port
@@ -117,6 +122,7 @@ RUN	apk --no-cache --update add \
 	"-q clamd" \
 	&& addgroup clamav amavis && addgroup amavis clamav \
 	&& ln -sf /var/amavis/.spamassassin /root/.spamassassin \
+	&& mkdir -p /var/db/dkim && chown amavis: /var/db/dkim \
 	&& cp /etc/amavisd.conf /etc/amavisd.conf.dist \
 	&& mtaconf addafter /etc/amavisd.conf '^$mydomain' '$inet_socket_bind = \x27127.0.0.1\x27; # limit to ipv4 loopback, no ipv6 support' \
 	&& mtaconf uncommentsection /etc/amavisd.conf "# ### http://www.clamav.net/" \
@@ -138,7 +144,8 @@ RUN	apk --no-cache --update add \
 #
 # target: auth
 #
-# add spf and opendkim 
+# add spf and opendkim
+# REMOVE THIS TARGET since amavisd can do dkim natively.
 #
 #
 
@@ -158,7 +165,7 @@ RUN	apk --no-cache --update add \
 	postfix-policyd-spf-perl \
 	&& setup-runit.sh "opendkim -f" \
 	&& addgroup postfix opendkim \
-	&& mkdir /run/opendkim && chown opendkim:opendkim /run/opendkim \
+	&& mkdir /run/opendkim && chown opendkim: /run/opendkim \
 	&& cp /etc/opendkim/opendkim.conf /etc/opendkim/opendkim.conf.dist \
 	&& mtaconf removeline /etc/opendkim/opendkim.conf ^#Socket \
 	&& mtaconf modify /etc/opendkim/opendkim.conf Socket local:/run/opendkim/opendkim.sock \

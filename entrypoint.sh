@@ -7,6 +7,7 @@
 docker_build_runit_root=${docker_build_runit_root-/etc/service}
 postfix_sasl_passwd=${postfix_sasl_passwd-/etc/postfix/sasl-passwords}
 postfix_virt_mailbox=${postfix_virt_mailbox-/etc/postfix/virt-users}
+postfix_virt_domain=${postfix_virt_domain-/etc/postfix/virtual_domains}
 postfix_virt_mailroot=${postfix_virt_mailroot-/var/mail}
 postfix_virt_mailuser=${postfix_virt_mailuser-postfix}
 postfix_ldap_users_cf=${postfix_ldap_users_cf-/etc/postfix/ldap-users.cf}
@@ -15,7 +16,8 @@ postfix_ldap_groups_cf=${postfix_ldap_groups_cf-/etc/postfix/ldap-groups.cf}
 postfix_ldap_expand_cf=${postfix_ldap_expand_cf-/etc/postfix/ldap-groups-expand.cf}
 amavis_cf=${amavis_cf-/etc/amavisd.conf}
 dovecot_users=${dovecot_users-/etc/dovecot/users}
-dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
+dovecot_cf=${dovecot_cf-/etc/dovecot/dovecot.conf}
+#dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
 
 #
 # define environment variables
@@ -213,26 +215,41 @@ postconf_dovecot() {
 
 modify_dovecot_conf() {
 	# configure dovecot to use passwd-file
-	cat <<-!cat >> ${1-$dovecot_cf}
+	[ -e ${1-$dovecot_cf} ] && cp $dovecot_cf $dovecot_cf.dist
+	cat <<-!cat > ${1-$dovecot_cf}
 		ssl = no
 		disable_plaintext_auth = no
 		auth_mechanisms = plain login
-		passdb { 
-			driver = passwd-file
-			args = ${2-$dovecot_users}
+		passdb {
+		    driver = passwd-file
+		    args = ${2-$dovecot_users}
 		}
 		userdb {
-			driver = static
-			args = uid=500 gid=500 home=/home/%u
+		    driver = static
+		    args = uid=500 gid=500 home=/home/%u
 		}
 		service auth {
-			unix_listener /var/spool/postfix/private/auth {
-				mode  = 0660
-				user  = $postfix_virt_mailuser
-				group = $postfix_virt_mailuser
-			}
+		    unix_listener /var/spool/postfix/private/auth {
+		        mode  = 0660
+		        user  = $postfix_virt_mailuser
+		        group = $postfix_virt_mailuser
+		    }
 		}
 	!cat
+}
+
+postconf_domains() {
+	local domains=${MAIL_DOMAIN-$(hostname -d)}
+	inform 0 "Configuring postfix for domains $domains"
+	if [ $(echo $domains | wc -w) -gt 1 ]; then
+		for domain in $domains; do
+			echo "$domain #domain" > $postfix_virt_domain
+		done
+		postconf -e virtual_alias_domains=hash:$postfix_virt_domain
+		postmap hash:$postfix_virt_domain
+	else
+		postconf -e mydomain=$domains
+	fi
 }
 
 postconf_amavis() {
@@ -272,13 +289,57 @@ postconf_amavis() {
 }
 
 mtaconf_amavis() {
-	local domain=${MAIL_DOMAIN-$(hostname -d)}
+	local domains=${MAIL_DOMAIN-$(hostname -d)}
+	local domain_main=$(echo $domains | sed 's/\s.*//')
+	local domain_extra=$(echo $domains | sed 's/[^ ]* *//' | sed 's/[^ ][^ ]*/"&"/g' | sed 's/ /, /g')
 	if apk info amavisd-new &>/dev/null; then
-		inform 0 "Configuring amavis"
-		modify /etc/amavisd.conf '\$mydomain' = "'"$domain"';"
-#		modify /etc/amavisd.conf '\$sa_tag_level_deflt' = '-999;'
-#		modify /etc/mail/spamassassin/local.cf use_bayes 1
-#		modify /etc/mail/spamassassin/local.cf bayes_auto_learn 1
+		inform 0 "Configuring amavis for domains $domains"
+		modify $amavis_cf '\$mydomain' = "'"$domain_main"';"
+		if [ $(echo $domains | wc -w) -gt 1 ]; then
+			modify $amavis_cf '@local_domains_maps' = '( [".$mydomain", '$domain_extra'] );'
+		fi
+	fi
+}
+
+mtaconf_dkim() {
+	local dbdir=/var/db/dkim
+	local user=amavis
+	local bits=${DKIM_KEYBITS-2048}
+	local domain=${MAIL_DOMAIN-$(hostname -d)}
+	local selector=${DKIM_SELECTOR-default}
+	local keyfile=$dbdir/$domain.$selector.privkey.pem
+	local keystring="$DKIM_PRIVATEKEY"
+	if apk info amavisd-new &>/dev/null; then
+		inform 0 "Setting dkim selector and domain to $selector and $domain"
+		cat <<-!cat >> $amavis_cf
+			dkim_key("$domain", "$selector", "$keyfile");
+			@dkim_signature_options_bysender_maps = ( { "." => { ttl => 21*24*3600, c => "relaxed/simple" } } );
+			1; # define return value
+		!cat
+		#nl $amavis_cf | tail -n 20
+		if [ -n "$keystring" ]; then
+			if [ -e $keyfile ]; then
+				inform 1 "Overwriting private dkim key here $keyfile"
+			else
+				inform 0 "Writing private dkim key here $keyfile"
+			fi
+			if echo "$keystring" | grep "PRIVATE KEY" - > /dev/null; then
+				echo "$keystring" fold -w 64 >> $keyfile
+			else
+				echo "-----BEGIN RSA PRIVATE KEY-----" > $keyfile
+				echo "$keystring" | fold -w 64 >> $keyfile
+				echo "-----END RSA PRIVATE KEY-----" >> $keyfile
+			fi
+		fi
+		if [ ! -e $keyfile ]; then
+			inform 1 "Generating private dkim key here $keyfile"
+			amavisd genrsa $keyfile $bits
+			#amavisd showkeys $domain
+			#amavisd testkeys $domain
+		fi
+		if [ -n "$(find $dbdir ! -user $user -print -exec chown -h $user: {} \;)" ]; then
+			inform 0 "Changed owner to $user for some files in $dbdir"
+		fi
 	fi
 }
 
@@ -567,13 +628,13 @@ cli_and_exit "$@"
 # configure services
 #
 
+postconf_domains
 postconf_relay
 postconf_amavis
 mtaconf_amavis
-#mtaconf_nolog
+mtaconf_dkim
 postconf_mbox
 postconf_ldap
-#postconf_transport
 postconf_opendkim
 mtaconf_opendkim
 postconf_spf

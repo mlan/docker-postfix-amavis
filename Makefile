@@ -39,10 +39,13 @@ TST_W8S  ?= 1
 TST_W8M  ?= 20
 TST_W8L  ?= 60
 
-.PHONY: build build-all build-smtp build-milter build-auth build-full \
+.PHONY: .FORCE build build-all build-smtp build-sasl build-milter build-auth build-full \
 	run run-fg start stop create purge rm-container rm-image cmd diff logs \
 	bayes install_debugtools exec-sa-learn download-spam \
-	push testwait testall testall test1
+	testall test1 test2 test3 test4 test5 test6 test7 test8 \
+	test_wait_s test_wait_m test_wait_l test_mail_s test_mail_m \
+	test_sendmail test_grepmail test_rmpem \
+	test_down test_clt_logs test_srv_logs test_clt_cmd test_srv_cmd
 
 build: Dockerfile
 	docker build $(BLD_ARG) --target full -t $(IMG_REPO)\:$(IMG_VER) .
@@ -125,15 +128,15 @@ dkim_import:
 dkim_test:
 	docker exec -it $(CNT_NAME) opendkim-testkey -vvv
 
-testall: test4 test5
+testall: test4 test5 test6 test7
 
-test_wait_s:
-	sleep $(TST_W8S)
+test_wait_s%:
+	if [ $* -gt 6 ]; then sleep $(TST_W8M); else sleep $(TST_W8S); fi
 
-test_wait_m:
-	sleep $(TST_W8M)
+test_wait_m%:
+	if [ $* -gt 6 ]; then sleep $(TST_W8L); else sleep $(TST_W8M); fi
 
-test_wait_l:
+test_wait_l%:
 	sleep $(TST_W8L)
 
 test1:
@@ -147,14 +150,11 @@ test2:
 test3:
 	cat test/spam-email.txt | nc -C localhost 25
 
-test4: test4_up test_wait_m test_mail_s test_down
+test_%: test_up% test_wait_m% test_mail_s% test_down%
+	date
 
-test5: test5_up test_wait_l test_mail_m test_down
-
-test6: test6_up test_wait_m test_mail_s test_down
-
-test4_up:
-	# test basic smtp function
+test_up4:
+	# test4: basic smtp function
 	docker network create $(TST_NET)
 	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
 		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
@@ -164,19 +164,8 @@ test4_up:
 		-e MYDESTINATION= \
 		$(IMG_REPO):$(IMG_VER)-smtp
 
-test5_up:
-	# test basic milter function
-	docker network create $(TST_NET)
-	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
-		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
-		$(IMG_REPO):$(IMG_VER)-milter
-	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
-		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
-		-e MYDESTINATION= \
-		$(IMG_REPO):$(IMG_VER)-milter
-
-test6_up:
-	# test tls
+test_up5: test_genpem
+	# test5: basic tls
 	docker network create $(TST_NET)
 	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
 		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
@@ -189,8 +178,8 @@ test6_up:
 		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
 		$(IMG_REPO):$(IMG_VER)-smtp
 
-test7_up:
-	# test sasl
+test_up6: test_genpem
+	# test6: basic sasl
 	docker network create $(TST_NET)
 	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
 		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
@@ -202,34 +191,70 @@ test7_up:
 	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
 		-e SMTP_RELAY_HOSTAUTH="[$(TST_SRV)]:587 $(TST_USR2):$(TST_PWD2)" \
 		-e INET_INTERFACES=loopback-only \
-		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=may \
-		$(IMG_REPO):$(IMG_VER)-sasl
+		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
+		$(IMG_REPO):$(IMG_VER)-smtp
 
-test_mail_s: test_sendmail test_wait_s test_grepmail
+test_up7:
+	# test7: basic milter function
+	docker network create $(TST_NET)
+	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
+		$(IMG_REPO):$(IMG_VER)-milter
+	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e MYDESTINATION= \
+		$(IMG_REPO):$(IMG_VER)-milter
 
-test_mail_m: test_sendmail test_wait_m test_grepmail
+test_up8:
+	# test8: dkim
+	docker network create $(TST_NET)
+	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+		-e MAIL_BOXES="$(TST_FROM) $(TST_TO)" \
+		$(IMG_REPO):$(IMG_VER)-milter
+	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e MYDESTINATION= \
+		$(IMG_REPO):$(IMG_VER)-milter
+
+test_mail_s: test_mail_s0
+
+test_mail_s%: test_sendmail% test_wait_s% test_grepmail%
+	date
+
+test_mail_m%: test_sendmail% test_wait_m% test_grepmail%
+	date
 
 test_dovecot_auth:
 	docker exec -it $(TST_SRV) doveadm auth lookup $(TST_USR2)
 
-test_sendmail:
+test_sendmail%:
 	printf "subject:Test\nfrom:$(TST_FROM)\n$(TST_MSG)\n" \
 	| docker exec -i $(TST_CLT) sendmail $(TST_TO)
 
-test_grepmail:
-	docker exec -it $(TST_SRV) cat /var/mail/$(TST_DOM)/receiver \
-	| grep ^$(TST_MSG)
+test_grepmail%:
+ifeq ($*,8)
+	$(eval tst_str := DKIM-Signature:)
+else
+	$(eval tst_str := ^$(TST_MSG))
+endif
+	docker exec -it $(TST_SRV) cat /var/mail/$(TST_DOM)/receiver | grep $(tst_str)
 
-test_genpem:
-	openssl genrsa -out $(TST_KEY)
+test_genpem: $(TST_CRT)
+
+$(TST_CRT): $(TST_KEY)
 	openssl req -x509 -utf8 -new -batch \
 		-subj "/CN=$(TST_SRV)" -key $(TST_KEY) -out $(TST_CRT)
+
+$(TST_KEY):
+	openssl genrsa -out $(TST_KEY)
 
 test_rmpem:
 	rm $(TST_KEY) $(TST_CRT)
 
-test_down:
-	docker stop $(TST_CLT) $(TST_SRV)
+test_down: test_down0
+
+test_down%:
+	docker stop $(TST_CLT) $(TST_SRV) || true
 	docker network rm $(TST_NET)
 
 test_clt_logs:
