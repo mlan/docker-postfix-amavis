@@ -45,8 +45,12 @@ RUN	apk --update add \
 	"syslogd -n -O /dev/stdout -l $SYSLOG_LEVEL" \
 	"crond -f -c /etc/crontabs" \
 	"postfix start-fg" \
+	&& cp /etc/postfix/main.cf /etc/postfix/main.cf.dist \
+	&& cp /etc/postfix/master.cf /etc/postfix/master.cf.dist \
 	&& postconf -e mynetworks_style=subnet \
-	&& rm -rf /var/cache/apk/*
+	&& rm -rf /var/cache/apk/* \
+	&& cp /etc/postfix/main.cf /etc/postfix/main.cf.build \
+	&& cp /etc/postfix/master.cf /etc/postfix/master.cf.build
 
 #
 # state standard smtp port
@@ -69,13 +73,13 @@ ENTRYPOINT ["entrypoint.sh"]
 
 #
 #
-# target: sasl
+# target: auth
 #
 # add dovecot to alow client auth
 #
 #
 
-FROM	smtp AS sasl
+FROM	smtp AS auth
 
 #
 # Install
@@ -91,10 +95,11 @@ RUN	apk --no-cache --update add dovecot \
 # target: milter
 #
 # add anti-spam and anti-virus mail filters
+# add dkim and spf
 #
 #
 
-FROM	sasl AS milter
+FROM	auth AS milter
 
 #
 # Install
@@ -112,6 +117,7 @@ RUN	apk --no-cache --update add \
 	razor \
 	clamav \
 	clamav-libunrar \
+#	postfix-policyd-spf-perl \
 	unzip \
 	unrar \
 	p7zip \
@@ -137,19 +143,22 @@ RUN	apk --no-cache --update add \
 	&& mtaconf modify /etc/clamav/freshclam.conf Foreground yes \
 	&& mtaconf modify /etc/clamav/freshclam.conf LogSyslog yes \
 	&& mtaconf comment /etc/clamav/freshclam.conf UpdateLogFile \
-	&& mtaconf modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL
+	&& mtaconf modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL \
+	&& cp /etc/amavisd.conf /etc/amavisd.conf.build \
+	&& cp /etc/clamav/clamd.conf /etc/clamav/clamd.conf.build \
+	&& cp /etc/clamav/freshclam.conf /etc/clamav/freshclam.conf.build
 
 
 #
 #
-# target: auth
+# target: dkim
 #
-# add spf and opendkim
+# add opendkim
 # REMOVE THIS TARGET since amavisd can do dkim natively.
 #
 #
 
-FROM	milter AS auth
+FROM	milter AS dkim
 
 #
 # Install
@@ -162,7 +171,6 @@ FROM	milter AS auth
 RUN	apk --no-cache --update add \
 	opendkim \
 	opendkim-utils \
-	postfix-policyd-spf-perl \
 	&& setup-runit.sh "opendkim -f" \
 	&& addgroup postfix opendkim \
 	&& mkdir /run/opendkim && chown opendkim: /run/opendkim \

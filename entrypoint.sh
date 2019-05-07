@@ -7,7 +7,7 @@
 docker_build_runit_root=${docker_build_runit_root-/etc/service}
 postfix_sasl_passwd=${postfix_sasl_passwd-/etc/postfix/sasl-passwords}
 postfix_virt_mailbox=${postfix_virt_mailbox-/etc/postfix/virt-users}
-postfix_virt_domain=${postfix_virt_domain-/etc/postfix/virtual_domains}
+postfix_virt_domain=${postfix_virt_domain-/etc/postfix/virt-domains}
 postfix_virt_mailroot=${postfix_virt_mailroot-/var/mail}
 postfix_virt_mailuser=${postfix_virt_mailuser-postfix}
 postfix_ldap_users_cf=${postfix_ldap_users_cf-/etc/postfix/ldap-users.cf}
@@ -15,7 +15,9 @@ postfix_ldap_alias_cf=${postfix_ldap_alias_cf-/etc/postfix/ldap-aliases.cf}
 postfix_ldap_groups_cf=${postfix_ldap_groups_cf-/etc/postfix/ldap-groups.cf}
 postfix_ldap_expand_cf=${postfix_ldap_expand_cf-/etc/postfix/ldap-groups-expand.cf}
 amavis_cf=${amavis_cf-/etc/amavisd.conf}
-dovecot_users=${dovecot_users-/etc/dovecot/users}
+amavis_dkim_dir=${amavis_dkim_dir-/var/db/dkim}
+amavis_dkim_user=${amavis_dkim_user-amavis}
+dovecot_users=${dovecot_users-/etc/dovecot/virt-passwd}
 dovecot_cf=${dovecot_cf-/etc/dovecot/dovecot.conf}
 #dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
 
@@ -236,19 +238,24 @@ modify_dovecot_conf() {
 		    }
 		}
 	!cat
+	[ -e ${1-$dovecot_cf} ] && cp $dovecot_cf $dovecot_cf.build
 }
 
 postconf_domains() {
+	# configure domains if we have recipients
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
-	inform 0 "Configuring postfix for domains $domains"
-	if [ $(echo $domains | wc -w) -gt 1 ]; then
-		for domain in $domains; do
-			echo "$domain #domain" > $postfix_virt_domain
-		done
-		postconf -e virtual_alias_domains=hash:$postfix_virt_domain
-		postmap hash:$postfix_virt_domain
-	else
-		postconf -e mydomain=$domains
+	if [ -n "$domains" ] && ([ -n "$LDAP_HOST" ] || [ -n "$MAIL_BOXES" ]); then
+		inform 0 "Configuring postfix for domains $domains"
+		if [ $(echo $domains | wc -w) -gt 1 ]; then
+			for domain in $domains; do
+				echo "$domain #domain" >> $postfix_virt_domain
+			done
+			postconf virtual_mailbox_domains=hash:$postfix_virt_domain
+			postmap  hash:$postfix_virt_domain
+		else
+			postconf mydomain=$domains
+			postconf virtual_mailbox_domains='$mydomain'
+		fi
 	fi
 }
 
@@ -288,7 +295,7 @@ postconf_amavis() {
 	fi
 }
 
-mtaconf_amavis() {
+mtaconf_amavis_domain() {
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	local domain_main=$(echo $domains | sed 's/\s.*//')
 	local domain_extra=$(echo $domains | sed 's/[^ ]* *//' | sed 's/[^ ][^ ]*/"&"/g' | sed 's/ /, /g')
@@ -301,20 +308,28 @@ mtaconf_amavis() {
 	fi
 }
 
-mtaconf_dkim() {
-	local dbdir=/var/db/dkim
-	local user=amavis
+mtaconf_amavis_dkim() {
+	# generate and activate dkim domainkey.
+	# incase of multi domain generate key for first domain only, but accept it
+	# to be used for all domains specified.
+	local domains=${MAIL_DOMAIN-$(hostname -d)}
+	local domain_main=$(echo $domains | sed 's/\s.*//')
+	local user=$amavis_dkim_user
 	local bits=${DKIM_KEYBITS-2048}
-	local domain=${MAIL_DOMAIN-$(hostname -d)}
 	local selector=${DKIM_SELECTOR-default}
-	local keyfile=$dbdir/$domain.$selector.privkey.pem
+	local keyfile=$amavis_dkim_dir/$domain.$selector.privkey.pem
+	local txtfile=$amavis_dkim_dir/$domain.$selector._domainkey.txt
 	local keystring="$DKIM_PRIVATEKEY"
 	if apk info amavisd-new &>/dev/null; then
-		inform 0 "Setting dkim selector and domain to $selector and $domain"
+		inform 0 "Setting dkim selector and domain to $selector and $domain_main"
+		# insert config statements just before last line
+		local lastline="$(sed -i -e '$ w /dev/stdout' -e '$d' $amavis_cf)"
 		cat <<-!cat >> $amavis_cf
-			dkim_key("$domain", "$selector", "$keyfile");
+			dkim_key("$domain_main", "$selector", "$keyfile");
 			@dkim_signature_options_bysender_maps = ( { "." => { ttl => 21*24*3600, c => "relaxed/simple" } } );
-			1; # define return value
+			
+			
+			$lastline
 		!cat
 		#nl $amavis_cf | tail -n 20
 		if [ -n "$keystring" ]; then
@@ -332,12 +347,12 @@ mtaconf_dkim() {
 			fi
 		fi
 		if [ ! -e $keyfile ]; then
-			inform 1 "Generating private dkim key here $keyfile"
-			amavisd genrsa $keyfile $bits
-			#amavisd showkeys $domain
-			#amavisd testkeys $domain
+			local message="$(amavisd genrsa $keyfile $bits)"
+			inform 1 "$message"
+			amavisd showkeys $domain_main > $txtfile
+			#amavisd testkeys $domain_main
 		fi
-		if [ -n "$(find $dbdir ! -user $user -print -exec chown -h $user: {} \;)" ]; then
+		if [ -n "$(find $amavis_dkim_dir ! -user $user -print -exec chown -h $user: {} \;)" ]; then
 			inform 0 "Changed owner to $user for some files in $dbdir"
 		fi
 	fi
@@ -409,12 +424,11 @@ update_dkimkey() {
 }
 
 postconf_spf() {
-	if apk info postfix-policyd-spf-perl &>/dev/null
-	then
-	inform 0 "Configuring postfix-spf"
-	postconf -e policyd-spf_time_limit=3600s
-	postconf -e "smtpd_recipient_restrictions=permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination, check_policy_service unix:private/policyd-spf"
-	postconf -M "policyd-spf/unix=policyd-spf unix - n n - - spawn user=nobody argv=/usr/bin/postfix-policyd-spf-perl"
+	if apk info postfix-policyd-spf-perl &>/dev/null; then
+		inform 0 "Configuring postfix-spf"
+		postconf -e policyd-spf_time_limit=3600s
+		postconf -e "smtpd_recipient_restrictions=permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination, check_policy_service unix:private/policyd-spf"
+		postconf -M "policyd-spf/unix=policyd-spf unix - n n - - spawn user=nobody argv=/usr/bin/postfix-policyd-spf-perl"
 	fi
 }
 
@@ -443,10 +457,9 @@ postconf_ldap_map() {
 }
 
 postconf_ldap() {
-	if [ -n "$LDAP_HOST" -a -n "$LDAP_USER_BASE" -a -n "$LDAP_QUERY_FILTER_USER" ]; then
+	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ]); then
 		inform 0 "Configuring postfix-ldap"
 		postconf alias_database=
-		postconf virtual_mailbox_domains='$mydomain'
 		postconf alias_maps=
 		postconf virtual_mailbox_maps=ldap:$postfix_ldap_users_cf
 		postconf_ldap_map "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_USER" > $postfix_ldap_users_cf
@@ -474,7 +487,6 @@ postconf_mbox() {
 		chown $postfix_virt_mailuser: $postfix_virt_mailroot
 		postconf alias_maps=
 		postconf alias_database=
-		postconf virtual_mailbox_domains='$mydomain'
 		postconf virtual_mailbox_base=$postfix_virt_mailroot
 		postconf virtual_uid_maps=static:$(id -u $postfix_virt_mailuser)
 		postconf virtual_gid_maps=static:$(id -g $postfix_virt_mailuser)
@@ -482,13 +494,6 @@ postconf_mbox() {
 		postmap hash:$postfix_virt_mailbox
 	fi
 }
-
-#postconf_transport() {
-#	if [ -n "$DAGENT_TRANSPORT" ]; then
-#		inform 0 "Configuring postfix-transport"
-#		postconf -e virtual_transport=$DAGENT_TRANSPORT
-#	fi
-#}
 
 mtaupdate_cert() {
 	# we are potentially updating $SMTPD_TLS_CERT_FILE and $SMTPD_TLS_KEY_FILE
@@ -631,8 +636,8 @@ cli_and_exit "$@"
 postconf_domains
 postconf_relay
 postconf_amavis
-mtaconf_amavis
-mtaconf_dkim
+mtaconf_amavis_domain
+mtaconf_amavis_dkim
 postconf_mbox
 postconf_ldap
 postconf_opendkim
