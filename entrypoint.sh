@@ -461,8 +461,8 @@ postconf_ldap_map() {
 postconf_ldap() {
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ]); then
 		inform 0 "Configuring postfix-ldap"
-		postconf alias_database=
 		postconf alias_maps=
+		postconf alias_database=
 		postconf virtual_mailbox_maps=ldap:$postfix_ldap_users_cf
 		postconf_ldap_map "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_USER" > $postfix_ldap_users_cf
 		if [ -n "$LDAP_QUERY_FILTER_ALIAS" ]; then
@@ -475,6 +475,13 @@ postconf_ldap() {
 				postconf virtual_alias_maps=ldap:$postfix_ldap_alias_cf
 			fi
 		fi
+		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxes
+			mkdir -p $postfix_virt_mailroot
+			chown $postfix_virt_mailuser: $postfix_virt_mailroot
+			postconf virtual_mailbox_base=$postfix_virt_mailroot
+			postconf virtual_uid_maps=static:$(id -u $postfix_virt_mailuser)
+			postconf virtual_gid_maps=static:$(id -g $postfix_virt_mailuser)
+		fi
 	fi
 }
 
@@ -483,17 +490,23 @@ postconf_mbox() {
 	if [ -n "$emails" ]; then
 		inform 0 "Configuring postfix-virt-mailboxes"
 		for email in $emails; do
-			echo $email ${email#*@}/${email%@*} >> $postfix_virt_mailbox
-			mkdir -m 777 -p $postfix_virt_mailroot/${email#*@}
+			echo $email $email >> $postfix_virt_mailbox
+#			echo $email ${email#*@}/${email%@*} >> $postfix_virt_mailbox
+#			if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
+#				mkdir -m 777 -p $postfix_virt_mailroot/${email#*@}
+#			fi
 		done
-		chown $postfix_virt_mailuser: $postfix_virt_mailroot
 		postconf alias_maps=
 		postconf alias_database=
-		postconf virtual_mailbox_base=$postfix_virt_mailroot
-		postconf virtual_uid_maps=static:$(id -u $postfix_virt_mailuser)
-		postconf virtual_gid_maps=static:$(id -g $postfix_virt_mailuser)
 		postconf virtual_mailbox_maps=hash:$postfix_virt_mailbox
 		postmap hash:$postfix_virt_mailbox
+		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
+			mkdir -p $postfix_virt_mailroot
+			chown $postfix_virt_mailuser: $postfix_virt_mailroot
+			postconf virtual_mailbox_base=$postfix_virt_mailroot
+			postconf virtual_uid_maps=static:$(id -u $postfix_virt_mailuser)
+			postconf virtual_gid_maps=static:$(id -g $postfix_virt_mailuser)
+		fi
 	fi
 }
 

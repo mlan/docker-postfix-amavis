@@ -13,7 +13,7 @@ before_script:
 script:
 #  - make test_1
 #  - make test_2
-#  - make test_3
+  - make test_3
   - make test_4
   - make test_5
   - make test_6

@@ -45,6 +45,7 @@ RUN	apk --update add \
 	"syslogd -n -O /dev/stdout -l $SYSLOG_LEVEL" \
 	"crond -f -c /etc/crontabs" \
 	"postfix start-fg" \
+	&& mkdir -p /var/mail && chown postfix: /var/mail \
 	&& cp /etc/postfix/main.cf /etc/postfix/main.cf.dist \
 	&& cp /etc/postfix/master.cf /etc/postfix/master.cf.dist \
 	&& postconf -e mynetworks_style=subnet \
