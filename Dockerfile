@@ -95,7 +95,7 @@ RUN	apk --no-cache --update add dovecot \
 # target: milter
 #
 # add anti-spam and anti-virus mail filters
-# add dkim and spf
+# as well as dkim and spf
 #
 #
 
@@ -117,7 +117,6 @@ RUN	apk --no-cache --update add \
 	razor \
 	clamav \
 	clamav-libunrar \
-#	postfix-policyd-spf-perl \
 	unzip \
 	unrar \
 	p7zip \
@@ -171,6 +170,7 @@ FROM	milter AS dkim
 RUN	apk --no-cache --update add \
 	opendkim \
 	opendkim-utils \
+	postfix-policyd-spf-perl \
 	&& setup-runit.sh "opendkim -f" \
 	&& addgroup postfix opendkim \
 	&& mkdir /run/opendkim && chown opendkim: /run/opendkim \

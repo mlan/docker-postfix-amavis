@@ -199,8 +199,8 @@ postconf_dovecot() {
 	if (apk info dovecot &>/dev/null && [ -n "$clientauth" ]); then
 		inform 0 "Enabling client SASL via submission"
 		# create client passwd file used for autentication
-		for passwd in $clientauth; do
-			echo $passwd >> $dovecot_users
+		for entry in $clientauth; do
+			echo $entry >> $dovecot_users
 		done
 		# enable sasl auth on the submission port
 		postconf -e smtp_sasl_security_options=noanonymous
@@ -214,6 +214,8 @@ postconf_dovecot() {
 		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
 	fi
 }
+
+doveadm_pw() { doveadm pw -p $1 ;}
 
 modify_dovecot_conf() {
 	# configure dovecot to use passwd-file
@@ -317,8 +319,8 @@ mtaconf_amavis_dkim() {
 	local user=$amavis_dkim_user
 	local bits=${DKIM_KEYBITS-2048}
 	local selector=${DKIM_SELECTOR-default}
-	local keyfile=$amavis_dkim_dir/$domain.$selector.privkey.pem
-	local txtfile=$amavis_dkim_dir/$domain.$selector._domainkey.txt
+	local keyfile=$amavis_dkim_dir/$domain_main.$selector.privkey.pem
+	local txtfile=$amavis_dkim_dir/$domain_main.$selector._domainkey.txt
 	local keystring="$DKIM_PRIVATEKEY"
 	if apk info amavisd-new &>/dev/null; then
 		inform 0 "Setting dkim selector and domain to $selector and $domain_main"
@@ -347,7 +349,7 @@ mtaconf_amavis_dkim() {
 			fi
 		fi
 		if [ ! -e $keyfile ]; then
-			local message="$(amavisd genrsa $keyfile $bits)"
+			local message="$(amavisd genrsa $keyfile $bits 2>&1)"
 			inform 1 "$message"
 			amavisd showkeys $domain_main > $txtfile
 			#amavisd testkeys $domain_main
@@ -642,7 +644,7 @@ postconf_mbox
 postconf_ldap
 postconf_opendkim
 mtaconf_opendkim
-postconf_spf
+#postconf_spf
 mtaupdate_cert
 postconf_tls
 postconf_dovecot

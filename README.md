@@ -1,10 +1,10 @@
 # The `mlan/postfix-amavis` repository
 
-![MicroBadger Size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
+![Travis (.org)](https://img.shields.io/travis/mlan/docker-postfix-amavis.svg?label=build&style=popout-square&logo=travis)![MicroBadger Size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
 ![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=popout-square&logo=docker)
 ![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=popout-square&logo=docker)
 
-This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](https://en.wikipedia.org/wiki/Message_transfer_agent) (SMTP) service using [Postfix](http://www.postfix.org/) with [anti-spam](https://en.wikipedia.org/wiki/Anti-spam_techniques) and anti-virus filter using [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [ClamAV](https://www.clamav.net/), as well as sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [OpenDKim](http://opendkim.org/).
+This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](https://en.wikipedia.org/wiki/Message_transfer_agent) (SMTP) service using [Postfix](http://www.postfix.org/) with [anti-spam](https://en.wikipedia.org/wiki/Anti-spam_techniques) and anti-virus filter using [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [ClamAV](https://www.clamav.net/), which also provides sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
 
 ## Features
 
@@ -13,7 +13,8 @@ Brief feature list follows below
 - MTA (SMTP) server and client [Postfix](http://www.postfix.org/)
 - Anti-spam filter [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/)
 - Anti-virus [ClamAV](https://www.clamav.net/)
-- Sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [OpenDKIM](http://opendkim.org/)
+- Sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail)
+- SMTP client authentication on the submission port 587 using [Dovecot](https://www.dovecot.org/)
 - Hooks for integrating [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using the reverse proxy [Traefik](https://docs.traefik.io/)
 - Simplified configuration of mailbox table lookup using environment variables
 - Simplified configuration of [LDAP](https://en.wikipedia.org/wiki/Lightweight_Directory_Access_Protocol) mailbox and alias lookup using environment variables
@@ -24,7 +25,7 @@ Brief feature list follows below
 - Multi-staged build providing the images `full`, `auth` , `milter` and `smtp`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
-- Built in utility script `mtaconf` helping configuring Postfix, AMaViS, SpamAssassin, ClamAV and OpenDKIM
+- Built in utility script `mtaconf` helping configuring Postfix, AMaViS, SpamAssassin, ClamAV and Dovecot
 - Makefile which can build images and do some management and testing
 - Health check
 - Small image size based on [Alpine Linux](https://alpinelinux.org/)
@@ -37,7 +38,7 @@ used. In addition to the three number version number you can use two or
 one number versions numbers, which refers to the latest version of the 
 sub series. The tag `latest` references the build based on the latest commit to the repository.
 
-The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `auth` , `milter` or `smtp`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `auth` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `milter` include Postfix and the anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter). Finally the image `smtp` only contain Postfix.
+The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `milter`, `auth` or `smtp`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `milter` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `auth` only include Postfix and Dovecot providing SMTP client authentication. Finally the image `smtp` only contain Postfix.
 
 To exemplify the usage of the tags, lets assume that the latest version is `1.0.0`. In this case `latest`, `1.0.0`, `1.0`, `1`, `full`, `full-1.0.0`, `full-1.0` and `full-1` all identify the same image.
 
@@ -184,15 +185,31 @@ mail without TLS encryption, by setting `SMTP_TLS_SECURITY_LEVEL=encrypt`. Defau
 
 To configure the Postfix SMTP client connecting using the legacy SMTPS protocol instead of using the STARTTLS command, set `SMTP_TLS_WRAPPERMODE=yes`. This mode requires `SMTP_TLS_SECURITY_LEVEL=encrypt` or stronger. Default: `SMTP_TLS_WRAPPERMODE=no`
 
+## Incoming submission client authentication
+
+Postfix achieves client authentication using Dovecot. Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the `SMTP_RELAY_HOSTAUTH`.  Here the client authentication is arranged on the [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587.
+
+#### `SMTPD_SASL_CLIENTAUTH`
+
+You can list clients and their passwords in a space separated string using the format: `"username:{scheme}passwd"`. Example: `SMTPD_SASL_CLIENTAUTH="client1:{plain}passwd1 client2:{plain}passwd2"`. For security you might want to use encrypted passwords. One way to encrypt a password (`{plain}secret`) is by running
+
+```bash
+docker exec -it mail-mta doveadm pw -p secret
+
+{CRYPT}$2y$05$Osj5ebALV/bXo18H4BKLa.J8Izn23ilI8TNA/lIHz92TuQFbZ/egK
+```
+
+for use in `SMTPD_SASL_CLIENTAUTH`.
+
 ## Incoming destination domain
 
 Postfix is configured to be
-the final destination of the virtual/hosted domains defined by the environment variable `MAIL_DOMAIN`. If the domains are not properly configured Postfix will be rejecting the emails. At present there is _no_ support for multiple domains.
+the final destination of the virtual/hosted domains defined by the environment variable `MAIL_DOMAIN`. If the domains are not properly configured Postfix will be rejecting the emails. When multiple domains are used the first domain in the list is considered to be the primary one.
 
 #### `MAIL_DOMAIN`
 
 The default value of `MAIL_DOMAIN=$(hostname -d)` is to
-use the host name of the container minus the first component. So you can either use the environment variable `MAIL_DOMAIN` or the argument `--hostname`. So for example, `--hostname mx1.example.com` or `-e MAIL_DOMAIN=example.com`.
+use the host name of the container minus the first component. So you can either use the environment variable `MAIL_DOMAIN` or the argument `--hostname`. So for example, `--hostname mx1.example.com` or `-e MAIL_DOMAIN="example.com secondary.com" `.
 
 ## Incoming TLS support
 
@@ -259,32 +276,30 @@ Sender Policy Framework (SPF) is an [email authentication](https://en.wikipedia.
 
 Domain-Keys Identified Mail (DKIM) is an [email authentication](https://en.wikipedia.org/wiki/Email_authentication) method designed to detect forged sender addresses in emails. DKIM allows the receiver to check that an email claimed to have come from a specific [domain](https://en.wikipedia.org/wiki/Domain_name) was indeed authorized by the owner of that domain. It achieves this by affixing a [digital signature](https://en.wikipedia.org/wiki/Digital_signature), linked to a domain name, `MAIL_DOMAIN`, to each outgoing email message, which the receiver can verify by using the DKIM key published in the [DNS](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions) records for that domain.
 
-OpenDKIM is configured to check the digital signature of incoming email as well as add digital signatures to outgoing email.
+amavisd-new is configured to check the digital signature of incoming email as well as add digital signatures to outgoing email.
 
 #### `DKIM_KEYBITS`
 
 The bit length used when creating new keys. Default: `DKIM_KEYBITS=2048`
 
 #### `DKIM_SELECTOR`
-This will set the `Selector` property in the `/etx/opendkim/opendkim.conf` file.
-The public key DNS record should appear as a TXT resource record at: `DKIM_SELECTOR._domainkey.DOMAIN`
+The public key DNS record should appear as a TXT resource record at: `DKIM_SELECTOR._domainkey.MAIL_DOMAIN`.  The TXT record to be used with the private key generated at container creation is written here:  `/var/db/dkim/MAIL_DOMAIN.DKIM_SELECTOR._domainkey.txt`.  
 
-Example `DKIM_SELECTOR=default`
+Default:  `DKIM_SELECTOR=default`
 #### `DKIM_PRIVATEKEY`
-Opendkim uses a private and public key pair used for signing and verifying your mail.
-The private key is stored here: `/var/db/dkim/$DKIM_SELECTOR.private`.
+DKIM uses a private and public key pair used for signing and verifying email. A private key is created when the container is created. If you already have a private key you can pass it to the container by using the environment variable `DKIM_PRIVATEKEY`. For convenience the strings `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----` can be omitted form the key string. For example `DKIM_PRIVATEKEY="MIIEpAIBAAKCAQEA04up8hoqzS...1+APIB0RhjXyObwHQnOzhAk"`
 
-Run the script "opendkim-genkey -s $DKIM_SELECTOR". The opendkim-genkey man
-page has full details of options. This will generate a private key
-in PEM format and output a TXT record containing the matching public
-key appropriate for insertion into your DNS zone file. Insert it in
-your zone file, increment the serial number, and reload your DNS system
-so the data is published.
-You can copy your key into the container `docker cp default.private container_name:var/db/dkim`.
+The private key is stored here  `/var/db/dkim/MAIL_DOMAIN.DKIM_SELECTOR.privkey.pem`, so alternatively you can copy the private key into the container: 
 
-Alternatively you can pass the private key using the `DKIMPRIVATE_KEY` variable.
-If you do, you can exclude the strings `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----`
-Example `DKIM_PRIVATEKEY="MIIEpAIBAAKCAQEA04up8hoqzS...1+APIB0RhjXyObwHQnOzhAk"`
+```bash
+docker cp $MAIL_DOMAIN.$DKIM_SELECTOR.privkey.pem <container_name>:var/db/dkim
+```
+
+ If you wish to create a new private key you can run:
+
+``````bash
+docker exec -it <container_name> amavisd genrsa /var/db/dkim/$MAIL_DOMAIN.$DKIM_SELECTOR.privkey.pem $DKIM_KEYBITS
+``````
 
 ## Table mailbox lookup
 

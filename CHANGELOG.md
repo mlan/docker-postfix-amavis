@@ -1,5 +1,8 @@
 # 1.2.0
 - Supports SMTP client SASL authentication using Dovecot
+- Support multiple domains
+- Now use AMaViS implementation of dkim, so dropping opendkim
+- Now use SpamAssassin implementation of SPF, so dropping postfix-policyd-spf-perl
 - AMaViS configuration is now possible using environment variables
 - Now all ClamAV logs are redirected as intended
 - Using alpine:latest since bug 9987 was resolved
