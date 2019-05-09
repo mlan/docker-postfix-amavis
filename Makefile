@@ -47,7 +47,7 @@ CNT_IP    = $(shell docker inspect -f \
 	$(1) | head -n1)
 
 TST_W8S1 ?= 1
-TST_W8S2 ?= 10
+TST_W8S2 ?= 30
 TST_W8L1 ?= 20
 TST_W8L2 ?= 120
 
