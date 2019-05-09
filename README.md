@@ -22,7 +22,7 @@ Brief feature list follows below
 - Simplified configuration of [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail) keys using environment variables
 - Simplified configuration of SMTP [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) using environment variables
 - Simplified generation of Diffie-Hellman parameters needed for [EDH](https://en.wikipedia.org/wiki/Diffie–Hellman_key_exchange) using utility script
-- Multi-staged build providing the images `full`, `auth` , `milter` and `smtp`
+- Multi-staged build providing the images `full`, `milter`, `mda` and `mta`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
 - Built in utility script `mtaconf` helping configuring Postfix, AMaViS, SpamAssassin, ClamAV and Dovecot
@@ -38,7 +38,7 @@ used. In addition to the three number version number you can use two or
 one number versions numbers, which refers to the latest version of the 
 sub series. The tag `latest` references the build based on the latest commit to the repository.
 
-The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `milter`, `auth` or `smtp`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `milter` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `auth` only include Postfix and Dovecot providing SMTP client authentication. Finally the image `smtp` only contain Postfix.
+The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `milter`, `mda` or `mta`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `milter` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `mda` only include Postfix and  [Dovecot](https://www.dovecot.org/), which provides mail delivery via IMAP and POP3 and SMTP client authentication. Finally the image `mta` only contain Postfix.
 
 To exemplify the usage of the tags, lets assume that the latest version is `1.0.0`. In this case `latest`, `1.0.0`, `1.0`, `1`, `full`, `full-1.0.0`, `full-1.0` and `full-1` all identify the same image.
 

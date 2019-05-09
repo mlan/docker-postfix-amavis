@@ -6,9 +6,9 @@ echo "hooks/build called with IMAGE_NAME=${DOCKER_REPO}:${DOCKER_TAG}, so we wil
 #printenv
 
 case "${DOCKER_TAG}" in
-	smtp*)                bld_target=smtp ;;
+	mta*)                 bld_target=mta ;;
+	mda*)                 bld_target=mda ;;
 	milter*)              bld_target=milter ;;
-	auth*)                bld_target=auth ;;
 	full*|latest*|[0-9]*) bld_target=full ;;
 	*)
 		echo "NOTHING since we do not know how to build with tag=${DOCKER_TAG}"

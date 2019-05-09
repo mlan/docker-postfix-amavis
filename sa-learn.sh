@@ -9,7 +9,8 @@
 
 SPAM_DIR=/tmp/spam
 SPAM_ARC=$SPAM_DIR.7z
-SPAM_HTTP=http://untroubled.org/spam/2018-01.7z
+LAST_MONTH=$(date -d '@'$(expr $(date +%s) - 2592000) +%Y-%m)
+SPAM_HTTP=http://untroubled.org/spam/$LAST_MONTH.7z
 
 spam_usage() { echo "
 	d) spam_download
@@ -35,6 +36,7 @@ spam_download() {
 	which 7z || apk add p7zip ncurses
 	mkdir -p $SPAM_DIR
 	if [ ! -e $SPAM_ARC ]; then
+		echo downloading $SPAM_HTTP
 		wget -O $SPAM_ARC $SPAM_HTTP
 		7z e -o$SPAM_DIR $SPAM_ARC
 	fi

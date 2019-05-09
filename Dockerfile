@@ -4,13 +4,13 @@ ARG	REL=latest
 
 #
 #
-# target: smtp
+# target: mta
 #
 # postfix only
 #
 #
 
-FROM	$DIST:$REL AS smtp
+FROM	$DIST:$REL AS mta
 LABEL	maintainer=mlan
 
 ENV	SYSLOG_LEVEL=4
@@ -74,13 +74,13 @@ ENTRYPOINT ["entrypoint.sh"]
 
 #
 #
-# target: auth
+# target: mda
 #
-# add dovecot to alow client auth
+# add dovecot
 #
 #
 
-FROM	smtp AS auth
+FROM	mta AS mda
 
 #
 # Install
@@ -100,7 +100,7 @@ RUN	apk --no-cache --update add dovecot \
 #
 #
 
-FROM	auth AS milter
+FROM	mda AS milter
 
 #
 # Install

@@ -14,6 +14,7 @@ postfix_ldap_users_cf=${postfix_ldap_users_cf-/etc/postfix/ldap-users.cf}
 postfix_ldap_alias_cf=${postfix_ldap_alias_cf-/etc/postfix/ldap-aliases.cf}
 postfix_ldap_groups_cf=${postfix_ldap_groups_cf-/etc/postfix/ldap-groups.cf}
 postfix_ldap_expand_cf=${postfix_ldap_expand_cf-/etc/postfix/ldap-groups-expand.cf}
+postfix_smtpd_tls_dir=${postfix_smtpd_tls_dir-/etc/postfix/ssl}
 amavis_cf=${amavis_cf-/etc/amavisd.conf}
 amavis_dkim_dir=${amavis_dkim_dir-/var/db/dkim}
 amavis_dkim_user=${amavis_dkim_user-amavis}
@@ -412,7 +413,7 @@ mtaconf_opendkim() {
 	fi
 }
 
-update_dkimkey() {
+update_opendkimkey() {
 	# you can call this function using optional args: bits
 	local defbits=${DKIM_KEYBITS-2048}
 	local bits=${1-$defbits}
@@ -520,11 +521,10 @@ mtaupdate_cert() {
 		ACME_TLS_DIR=${ACME_TLS_DIR-/tmp/ssl}
 		ACME_TLS_CERT_FILE=$ACME_TLS_DIR/certs/${HOSTNAME}.crt
 		ACME_TLS_KEY_FILE=$ACME_TLS_DIR/private/${HOSTNAME}.key
-		SMTPD_TLS_DIR=${SMTPD_TLS_DIR-/etc/postfix/ssl}
 		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$ACME_TLS_CERT_FILE}
 		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$ACME_TLS_KEY_FILE}
 		local runit_dir=$docker_build_runit_root/acme
-		mkdir -p $SMTPD_TLS_DIR $ACME_TLS_DIR $runit_dir
+		mkdir -p $postfix_smtpd_tls_dir $ACME_TLS_DIR $runit_dir
 		cat <<-! > $runit_dir/run
 			#!/bin/bash -e
 			
@@ -552,21 +552,20 @@ postconf_tls() {
 	fi
 }
 
-postconf_edh() {
+regen_edh() {
+	# Optionally generate non-default Postfix SMTP server EDH parameters for improved security
+	# note, since 2015, 512 bit export ciphers are no longer used
 	# this takes a long time. run this manually once the container is up by:
-	# mtaconf postconf_edh
+	# mtaconf regen_edh
+	# smtpd_tls_dh1024_param_file
+	local bits=${1-2048}
 	if apk info openssl &>/dev/null; then
-		inform 0 "Configuring postfix-edh"
-		SMTPD_TLS_DIR=${SMTPD_TLS_DIR-/etc/postfix/ssl}
-		cd $SMTPD_TLS_DIR
-#		umask 022
-		openssl dhparam -out dh512.tmp 512 && mv dh512.tmp dh512.pem
-		openssl dhparam -out dh1024.tmp 1024 && mv dh1024.tmp dh1024.pem
-		openssl dhparam -out dh2048.tmp 2048 && mv dh2048.tmp dh2048.pem
-		chmod 644 dh512.pem dh1024.pem dh2048.pem
-		cd - &>/dev/null
-		postconf -e smtpd_tls_dh1024_param_file=$SMTPD_TLS_DIR/dh2048.pem
-		postconf -e smtpd_tls_dh512_param_file=$SMTPD_TLS_DIR/dh512.pem
+		inform 0 "Regenerating postfix edh $bits bit parameters"
+		mkdir -p $postfix_smtpd_tls_dir
+		openssl dhparam -out $postfix_smtpd_tls_dir/dh$bits.pem $bits
+		postconf smtpd_tls_dh1024_param_file=$postfix_smtpd_tls_dir/dh$bits.pem
+	else
+		inform 1 "Cannot regenerate edh since openssl is not installed"
 	fi
 }
 
