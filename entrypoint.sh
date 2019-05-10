@@ -8,16 +8,18 @@ docker_build_runit_root=${docker_build_runit_root-/etc/service}
 postfix_sasl_passwd=${postfix_sasl_passwd-/etc/postfix/sasl-passwords}
 postfix_virt_mailbox=${postfix_virt_mailbox-/etc/postfix/virt-users}
 postfix_virt_domain=${postfix_virt_domain-/etc/postfix/virt-domains}
-postfix_virt_mailroot=${postfix_virt_mailroot-/var/mail}
-postfix_virt_mailuser=${postfix_virt_mailuser-postfix}
+mail_dir=${mail_dir-/var/mail}
+postfix_runas=${postfix_runas-postfix}
 postfix_ldap_users_cf=${postfix_ldap_users_cf-/etc/postfix/ldap-users.cf}
 postfix_ldap_alias_cf=${postfix_ldap_alias_cf-/etc/postfix/ldap-aliases.cf}
 postfix_ldap_groups_cf=${postfix_ldap_groups_cf-/etc/postfix/ldap-groups.cf}
 postfix_ldap_expand_cf=${postfix_ldap_expand_cf-/etc/postfix/ldap-groups-expand.cf}
 postfix_smtpd_tls_dir=${postfix_smtpd_tls_dir-/etc/postfix/ssl}
+postfix_home=${postfix_home-/var/spool/postfix}
 amavis_cf=${amavis_cf-/etc/amavisd.conf}
-amavis_dkim_dir=${amavis_dkim_dir-/var/db/dkim}
-amavis_dkim_user=${amavis_dkim_user-amavis}
+dkim_dir=${dkim_dir-/var/db/dkim}
+amavis_runas=${amavis_runas-amavis}
+amavis_home=${amavis_home-/var/amavis}
 dovecot_users=${dovecot_users-/etc/dovecot/virt-passwd}
 dovecot_cf=${dovecot_cf-/etc/dovecot/dovecot.conf}
 #dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
@@ -26,7 +28,7 @@ dovecot_cf=${dovecot_cf-/etc/dovecot/dovecot.conf}
 # define environment variables
 #
 
-amavis_var="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BAD_HEADER_DESTINY"
+amavis_var="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BAD_HEADER_DESTINY SA_TAG_LEVEL_DEFLT SA_TAG2_LEVEL_DEFLT LOG_LEVEL"
 
 #
 # usage
@@ -165,10 +167,21 @@ removeline() {
 	inform -1 '/'"$string"'.*/d' $cfg_file
 	sed -i '/'"$string"'.*/d' $cfg_file
 }
+
 uniquelines() {
 	local cfg_file=$1
 	inform -1 '$!N; /^(.*)\n\1$/!P; D' $cfg_file
 	sed -ri '$!N; /^(.*)\n\1$/!P; D' $cfg_file
+}
+
+_isvirgin() { diff $1.build $1 >/dev/null ;}
+_ismissing() { [ ! -f $1 ] ;}
+_chowncond() {
+	local user=$1
+	local dir=$2
+	if [ -n "$(find $dir ! -user $user -print -exec chown -h $user: {} \;)" ]; then
+		inform 0 "Changed owner to $user for some files in $dir"
+	fi
 }
 
 #
@@ -197,10 +210,11 @@ postconf_relay() {
 postconf_dovecot() {
 	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	# dovecot need to be installed
-	if (apk info dovecot &>/dev/null && [ -n "$clientauth" ]); then
+	if (apk -e info dovecot &>/dev/null && [ -n "$clientauth" ]); then
 		inform 0 "Enabling client SASL via submission"
 		# create client passwd file used for autentication
 		for entry in $clientauth; do
+			# consider persist
 			echo $entry >> $dovecot_users
 		done
 		# enable sasl auth on the submission port
@@ -219,6 +233,7 @@ postconf_dovecot() {
 doveadm_pw() { doveadm pw -p $1 ;}
 
 modify_dovecot_conf() {
+	# run during build time
 	# configure dovecot to use passwd-file
 	[ -e ${1-$dovecot_cf} ] && cp $dovecot_cf $dovecot_cf.dist
 	cat <<-!cat > ${1-$dovecot_cf}
@@ -236,8 +251,8 @@ modify_dovecot_conf() {
 		service auth {
 		    unix_listener /var/spool/postfix/private/auth {
 		        mode  = 0660
-		        user  = $postfix_virt_mailuser
-		        group = $postfix_virt_mailuser
+		        user  = $postfix_runas
+		        group = $postfix_runas
 		    }
 		}
 	!cat
@@ -263,7 +278,7 @@ postconf_domains() {
 }
 
 postconf_amavis() {
-	if apk info amavisd-new &>/dev/null
+	if apk -e info amavisd-new &>/dev/null
 	then
 	inform 0 "Configuring postfix-amavis"
 	postconf -e content_filter=smtp-amavis:[localhost]:10024
@@ -302,7 +317,7 @@ mtaconf_amavis_domain() {
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	local domain_main=$(echo $domains | sed 's/\s.*//')
 	local domain_extra=$(echo $domains | sed 's/[^ ]* *//' | sed 's/[^ ][^ ]*/"&"/g' | sed 's/ /, /g')
-	if apk info amavisd-new &>/dev/null; then
+	if apk -e info amavisd-new &>/dev/null; then
 		inform 0 "Configuring amavis for domains $domains"
 		modify $amavis_cf '\$mydomain' = "'"$domain_main"';"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
@@ -317,13 +332,13 @@ mtaconf_amavis_dkim() {
 	# to be used for all domains specified.
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	local domain_main=$(echo $domains | sed 's/\s.*//')
-	local user=$amavis_dkim_user
+	local user=$amavis_runas
 	local bits=${DKIM_KEYBITS-2048}
 	local selector=${DKIM_SELECTOR-default}
-	local keyfile=$amavis_dkim_dir/$domain_main.$selector.privkey.pem
-	local txtfile=$amavis_dkim_dir/$domain_main.$selector._domainkey.txt
+	local keyfile=$dkim_dir/$domain_main.$selector.privkey.pem
+	local txtfile=$dkim_dir/$domain_main.$selector._domainkey.txt
 	local keystring="$DKIM_PRIVATEKEY"
-	if apk info amavisd-new &>/dev/null; then
+	if apk -e info amavisd-new &>/dev/null; then
 		inform 0 "Setting dkim selector and domain to $selector and $domain_main"
 		# insert config statements just before last line
 		local lastline="$(sed -i -e '$ w /dev/stdout' -e '$d' $amavis_cf)"
@@ -355,14 +370,12 @@ mtaconf_amavis_dkim() {
 			amavisd showkeys $domain_main > $txtfile
 			#amavisd testkeys $domain_main
 		fi
-		if [ -n "$(find $amavis_dkim_dir ! -user $user -print -exec chown -h $user: {} \;)" ]; then
-			inform 0 "Changed owner to $user for some files in $dbdir"
-		fi
+		_chowncond $user $dkim_dir
 	fi
 }
 
 postconf_opendkim() {
-	if apk info opendkim &>/dev/null
+	if apk -e info opendkim &>/dev/null
 	then
 	inform 0 "Configuring postfix-opendkim"
 	postconf -e milter_default_action=accept
@@ -427,7 +440,7 @@ update_opendkimkey() {
 }
 
 postconf_spf() {
-	if apk info postfix-policyd-spf-perl &>/dev/null; then
+	if apk -e info postfix-policyd-spf-perl &>/dev/null; then
 		inform 0 "Configuring postfix-spf"
 		postconf -e policyd-spf_time_limit=3600s
 		postconf -e "smtpd_recipient_restrictions=permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination, check_policy_service unix:private/policyd-spf"
@@ -477,11 +490,11 @@ postconf_ldap() {
 			fi
 		fi
 		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxes
-			mkdir -p $postfix_virt_mailroot
-			chown $postfix_virt_mailuser: $postfix_virt_mailroot
-			postconf virtual_mailbox_base=$postfix_virt_mailroot
-			postconf virtual_uid_maps=static:$(id -u $postfix_virt_mailuser)
-			postconf virtual_gid_maps=static:$(id -g $postfix_virt_mailuser)
+			mkdir -p $mail_dir
+			_chowncond $postfix_runas $mail_dir
+			postconf virtual_mailbox_base=$mail_dir
+			postconf virtual_uid_maps=static:$(id -u $postfix_runas)
+			postconf virtual_gid_maps=static:$(id -g $postfix_runas)
 		fi
 	fi
 }
@@ -494,7 +507,7 @@ postconf_mbox() {
 			echo $email $email >> $postfix_virt_mailbox
 #			echo $email ${email#*@}/${email%@*} >> $postfix_virt_mailbox
 #			if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
-#				mkdir -m 777 -p $postfix_virt_mailroot/${email#*@}
+#				mkdir -m 777 -p $mail_dir/${email#*@}
 #			fi
 		done
 		postconf alias_maps=
@@ -502,11 +515,11 @@ postconf_mbox() {
 		postconf virtual_mailbox_maps=hash:$postfix_virt_mailbox
 		postmap hash:$postfix_virt_mailbox
 		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
-			mkdir -p $postfix_virt_mailroot
-			chown $postfix_virt_mailuser: $postfix_virt_mailroot
-			postconf virtual_mailbox_base=$postfix_virt_mailroot
-			postconf virtual_uid_maps=static:$(id -u $postfix_virt_mailuser)
-			postconf virtual_gid_maps=static:$(id -g $postfix_virt_mailuser)
+			mkdir -p $mail_dir
+			_chowncond $postfix_runas $mail_dir
+			postconf virtual_mailbox_base=$mail_dir
+			postconf virtual_uid_maps=static:$(id -u $postfix_runas)
+			postconf virtual_gid_maps=static:$(id -g $postfix_runas)
 		fi
 	fi
 }
@@ -559,7 +572,7 @@ regen_edh() {
 	# mtaconf regen_edh
 	# smtpd_tls_dh1024_param_file
 	local bits=${1-2048}
-	if apk info openssl &>/dev/null; then
+	if apk -e info openssl &>/dev/null; then
 		inform 0 "Regenerating postfix edh $bits bit parameters"
 		mkdir -p $postfix_smtpd_tls_dir
 		openssl dhparam -out $postfix_smtpd_tls_dir/dh$bits.pem $bits
@@ -598,7 +611,7 @@ postconf_envvar() {
 }
 
 mtaconf_nolog() {
-	if apk info clamav &>/dev/null; then
+	if apk -e info clamav &>/dev/null; then
 		inform 0 "Configuring no logs for clam"
 		comment /etc/clamav/freshclam.conf UpdateLogFile /var/log/clamav/freshclam.log
 		comment /etc/clamav/clamd.conf LogFile /var/log/clamav/clamd.log
@@ -606,16 +619,26 @@ mtaconf_nolog() {
 }
 
 mtaupdate_sa() {
-	if apk info spamassassin &>/dev/null; then
+	if apk -e info spamassassin &>/dev/null; then
 		inform 0 "Updating rules for spamassassin"
 		( sa-update ) &
 	fi
 }
 
 loglevel() {
-	if [ -n "$SYSLOG_LEVEL" -a $SYSLOG_LEVEL -ne 4 ]; then
-		setup-runit.sh "syslogd -n -O /dev/stdout -l $SYSLOG_LEVEL"
+	local loglevel=${1-$SYSLOG_LEVEL}
+	if [ -n "$loglevel" ]; then
+		setup-runit.sh "syslogd -n -O /dev/stdout -l $loglevel"
 	fi
+	if [ "$calledformcli" = true ]; then
+		sv restart syslogd
+	fi
+}
+
+chown_home() {
+	_chowncond $postfix_runas $postfix_home
+	_chowncond $postfix_runas $mail_dir
+	_chowncond $amavis_runas  $amavis_home
 }
 
 #
@@ -624,6 +647,7 @@ loglevel() {
 
 cli_and_exit() {
 	if [ "$(basename $0)" = mtaconf ]; then
+		calledformcli=true
 		local cmd=$1
 		if [ -n "$cmd" ]; then
 			shift
@@ -661,6 +685,7 @@ mtaupdate_cert
 postconf_tls
 postconf_dovecot
 postconf_envvar
+chown_home
 
 #
 # Download rules for spamassassin at start up.

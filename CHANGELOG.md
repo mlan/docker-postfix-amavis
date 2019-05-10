@@ -5,8 +5,9 @@
 - Now use SpamAssassin implementation of SPF, so dropping postfix-policyd-spf-perl
 - AMaViS configuration is now possible using environment variables
 - Now all ClamAV logs are redirected as intended
-- Using alpine:latest since bug 9987 was resolved
+- Using alpine:latest since bug [9987](https://bugs.alpinelinux.org/issues/9987) was resolved
 - Configured tests run on Travis CI.
+- Now install tzdata in target full to allow time zone configuration
 
 # 1.1.1
 - Make sure the .env settings are honored also for MYSQL

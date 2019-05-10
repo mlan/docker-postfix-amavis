@@ -88,6 +88,7 @@ FROM	mta AS mda
 
 RUN	apk --no-cache --update add dovecot \
 	&& setup-runit.sh "dovecot -F" \
+	&& addgroup postfix dovecot && addgroup dovecot postfix \
 	&& mtaconf modify_dovecot_conf
 
 
@@ -115,6 +116,7 @@ FROM	mda AS milter
 RUN	apk --no-cache --update add \
 	amavisd-new \
 	spamassassin \
+	perl-mail-spf \
 	razor \
 	clamav \
 	clamav-libunrar \
@@ -131,8 +133,10 @@ RUN	apk --no-cache --update add \
 	&& mkdir -p /var/db/dkim && chown amavis: /var/db/dkim \
 	&& cp /etc/amavisd.conf /etc/amavisd.conf.dist \
 	&& mtaconf addafter /etc/amavisd.conf '^$mydomain' '$inet_socket_bind = \x27127.0.0.1\x27; # limit to ipv4 loopback, no ipv6 support' \
+	&& mtaconf addafter /etc/amavisd.conf '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \
 	&& mtaconf uncommentsection /etc/amavisd.conf "# ### http://www.clamav.net/" \
 	&& mtaconf replace /etc/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
+	&& mtaconf modify /etc/amavisd.conf '\$pid_file' = '"$MYHOME/amavisd.pid";' \
 	&& mkdir /run/clamav && chown clamav:clamav /run/clamav \
 	&& cp /etc/clamav/clamd.conf /etc/clamav/clamd.conf.dist \
 	&& cp /etc/clamav/freshclam.conf /etc/clamav/freshclam.conf.dist \
@@ -191,6 +195,7 @@ RUN	apk --no-cache --update add \
 # target: full
 #
 # add letsencrypt support via traefik
+# add tzdata to allow time zone to be configured
 #
 #
 
@@ -205,7 +210,8 @@ RUN	apk --no-cache --update add \
 	jq \
 	openssl \
 	util-linux \
-	bash
+	bash \
+	tzdata
 
 #
 # Copy utility scripts to image

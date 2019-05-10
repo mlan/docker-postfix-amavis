@@ -1,10 +1,11 @@
 # The `mlan/postfix-amavis` repository
 
-![Travis (.org)](https://img.shields.io/travis/mlan/docker-postfix-amavis.svg?label=build&style=popout-square&logo=travis)![MicroBadger Size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
+![Travis (.org)](https://img.shields.io/travis/mlan/docker-postfix-amavis.svg?label=build&style=popout-square&logo=travis)
+![MicroBadger Size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
 ![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=popout-square&logo=docker)
 ![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=popout-square&logo=docker)
 
-This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](https://en.wikipedia.org/wiki/Message_transfer_agent) (SMTP) service using [Postfix](http://www.postfix.org/) with [anti-spam](https://en.wikipedia.org/wiki/Anti-spam_techniques) and anti-virus filter using [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [ClamAV](https://www.clamav.net/), which also provides sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
+This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](https://en.wikipedia.org/wiki/Message_transfer_agent) (SMTP) service using [Postfix](http://www.postfix.org/) and [Dovecot](https://www.dovecot.org/) with [anti-spam](https://en.wikipedia.org/wiki/Anti-spam_techniques) and anti-virus filter using [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [ClamAV](https://www.clamav.net/), which also provides sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
 
 ## Features
 
@@ -38,13 +39,13 @@ used. In addition to the three number version number you can use two or
 one number versions numbers, which refers to the latest version of the 
 sub series. The tag `latest` references the build based on the latest commit to the repository.
 
-The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `milter`, `mda` or `mta`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `milter` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `mda` only include Postfix and  [Dovecot](https://www.dovecot.org/), which provides mail delivery via IMAP and POP3 and SMTP client authentication. Finally the image `mta` only contain Postfix.
+The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `milter`, `mda` or `mta`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `milter` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `mda` only include [Postfix](http://www.postfix.org/)  and [Dovecot](https://www.dovecot.org/), which provides mail delivery via IMAP and POP3 and SMTP client authentication. Finally the image `mta` only contain Postfix.
 
 To exemplify the usage of the tags, lets assume that the latest version is `1.0.0`. In this case `latest`, `1.0.0`, `1.0`, `1`, `full`, `full-1.0.0`, `full-1.0` and `full-1` all identify the same image.
 
 # Usage
 
-Often you want to configure Postfix and its components. There are different methods available to achieve this. You can use the environment variables described below set in the shell before creating the container. These environment variables can also be explicitly given on the command line when creating the container. They can also be given in an `docker-compose.yml` file, see below. Moreover docker volumes or host directories with desired configuration files can be mounted in the container. And finally you can `exec` into a running container and modify configuration files directly.
+Often you want to configure Postfix and its components. There are different methods available to achieve this. You can use the environment variables described below set in the shell before creating the container. These environment variables can also be explicitly given on the command line when creating the container. They can also be given in an `docker-compose.yml` file, see below. Moreover docker volumes or host directories with desired configuration files can be mounted in the container. And finally you can `docker exec` into a running container and modify configuration files directly.
 
 If you want to test the image you can start it using the destination domain `example.com` and table mail boxes for info@example.com and abuse@example.com using the shell command below.
 
@@ -151,7 +152,7 @@ This repository contains a `demo` directory which hold the `docker-compose.yml` 
 make init
 ```
 
-Then you can assess WebApp on the URL [`http://localhost:8080`](http://localhost:8080) and log in with the user name `demo` and password `demo` . You can send a test email by typing:
+Once you have given the container some time to start up you can assess WebApp on the URL [`http://localhost:8080`](http://localhost:8080) and log in with the user name `demo` and password `demo` . You can send a test email by typing:
 
 ```bash
 make test
@@ -352,7 +353,7 @@ The `mlan/postfix-amavis` image is designed primarily to work with a companion s
 
 Postfix delivers the messages to the companion software, like [Kolab](https://hub.docker.com/r/kvaps/kolab), [Kopano](https://cloud.docker.com/u/mlan/repository/docker/mlan/kopano) or [Zimbra](https://hub.docker.com/r/jorgedlcruz/zimbra/), using a transport mechanism you specify using the environment variable `VIRTUAL_TRANSPORT`. [LMTP](https://en.wikipedia.org/wiki/Local_Mail_Transfer_Protocol) is one such transport mechanism. One example of final delivery transport to Kopano is: `VIRTUAL_TRANSPORT=lmtp:app:2003`
 
-Local mail boxes will be created if there is no  `VIRTUAL_TRANSPORT` defined. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/info@example.com`.
+Local mail boxes will be created if there is no  `VIRTUAL_TRANSPORT` defined. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/info@example.com`.
 
 ## Message size limit `MESSAGE_SIZE_LIMIT`
 

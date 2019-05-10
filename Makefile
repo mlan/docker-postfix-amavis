@@ -19,8 +19,10 @@ TST_NET  ?= test-net
 TST_CLT  ?= test-client
 TST_SRV  ?= test-server
 TST_AUTH ?= test-auth
-TST_LOGL ?= 4
-TST_ENV  ?= --network $(TST_NET) -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_LOGL)
+TST_SLOG ?= 4
+TST_ALOG ?= 5
+TST_TZ   ?= UTC
+TST_ENV  ?= --network $(TST_NET) -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) -e TZ=$(TST_TZ)
 TST_MSG  ?= ---test-message---
 TST_KEY  ?= local_priv_key.pem
 TST_CRT  ?= local_ca_cert.pem
@@ -57,25 +59,25 @@ TST_W8L2 ?= 120
     test-cmd-clt test-cmd-srv test-diff-clt test-diff-srv
 
 build: Dockerfile
-	docker build $(BLD_ARG) --target full -t $(IMG_REPO)\:$(IMG_VER) .
+	docker build $(BLD_ARG) --target full -t $(IMG_REPO):$(IMG_VER) .
 
 build-all: build-mta build-mda build-milter build-full
 
 build-mta: Dockerfile
-	docker build $(BLD_ARG) --target mta -t $(IMG_REPO)\:$(IMG_VER)-mta .
+	docker build $(BLD_ARG) --target mta -t $(IMG_REPO):$(IMG_VER)-mta .
 
 build-mda: Dockerfile
-	docker build $(BLD_ARG) --target mda -t $(IMG_REPO)\:$(IMG_VER)-mda .
+	docker build $(BLD_ARG) --target mda -t $(IMG_REPO):$(IMG_VER)-mda .
 
 build-milter: Dockerfile
-	docker build $(BLD_ARG) --target milter -t $(IMG_REPO)\:$(IMG_VER)-milter .
+	docker build $(BLD_ARG) --target milter -t $(IMG_REPO):$(IMG_VER)-milter .
 
 build-full: Dockerfile
-	docker build $(BLD_ARG) --target full -t $(IMG_REPO)\:$(IMG_VER)-full \
+	docker build $(BLD_ARG) --target full -t $(IMG_REPO):$(IMG_VER)-full \
 		-t $(IMG_REPO)\:$(IMG_VER) .
 
 build-dkim: Dockerfile
-	docker build $(BLD_ARG) --target dkim -t $(IMG_REPO)\:$(IMG_VER)-sasl .
+	docker build $(BLD_ARG) --target dkim -t $(IMG_REPO):$(IMG_VER)-sasl .
 
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
@@ -156,11 +158,12 @@ test-up_7: test-up-net
 	# test (7) basic milter function
 	#
 	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
-		-e MAIL_BOXES="$(TST_BOX)" \
+		-e MAIL_BOXES="$(TST_BOX)" -e SA_TAG_LEVEL_DEFLT=-999 \
+		-e LOG_LEVEL=$(TST_ALOG) \
 		$(IMG_REPO):$(IMG_VER)-milter
 	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
-		-e MYDESTINATION= \
+		-e MYDESTINATION= -e LOG_LEVEL=$(TST_ALOG) \
 		$(IMG_REPO):$(IMG_VER)-milter
 
 test-up_8: test-up-net
@@ -169,11 +172,11 @@ test-up_8: test-up-net
 	#
 	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
 		-e MAIL_BOXES="$(TST_BOX2)" -e MAIL_DOMAIN="$(TST_DOM) $(TST_DOM2)" \
-		$(IMG_REPO):$(IMG_VER)-milter
+		$(IMG_REPO):$(IMG_VER)-full
 	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e MAIL_DOMAIN="$(TST_DOM)" \
-		$(IMG_REPO):$(IMG_VER)-milter
+		$(IMG_REPO):$(IMG_VER)-full
 
 test-mail: test-mail_0
 
@@ -199,7 +202,7 @@ test-down: test-down_0
 
 test-down_%:
 	docker stop $(TST_CLT) $(TST_SRV) $(TST_AUTH) 2>/dev/null || true
-	if [ $* -ge 1 ]; then sleep $(TST_W8S1); fi
+	if [ $* -ge 0 ]; then sleep $(TST_W8S1); fi
 
 test-up-auth:
 	docker run --rm -d --name $(TST_AUTH) --network $(TST_NET) mlan/openldap
@@ -266,4 +269,6 @@ test-learn-bayes:
 test-learn-spam:
 	docker exec -it $(TST_SRV) sa-learn.sh a
 
-
+test-timezone-srv:
+	docker cp /usr/share/zoneinfo/$(TST_TZ) $(TST_SRV):/etc/localtime
+	docker exec -it $(TST_SRV) sh -c 'echo $(TST_TZ) > /etc/timezone'
