@@ -300,7 +300,7 @@ test-diff-srv:
 	docker container diff $(TST_SRV)
 
 test-regen-edh-srv:
-	docker exec -it $(TST_SRV) mtaconf regen_edh
+	docker exec -it $(TST_SRV) conf update_postfix_dhparam
 
 test-dkim-key:
 	docker exec -it $(TST_SRV) amavisd testkeys

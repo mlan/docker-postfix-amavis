@@ -40,7 +40,7 @@ RUN	apk --update add \
 	cyrus-sasl-plain \
 	cyrus-sasl-login \
 	; fi \
-	&& ln -s /usr/local/bin/entrypoint.sh /usr/local/bin/mtaconf \
+	&& ln -s /usr/local/bin/entrypoint.sh /usr/local/bin/conf \
 	&& setup-runit.sh \
 	"syslogd -n -O /dev/stdout -l $SYSLOG_LEVEL" \
 	"crond -f -c /etc/crontabs" \
@@ -89,7 +89,7 @@ FROM	mta AS mda
 RUN	apk --no-cache --update add dovecot \
 	&& setup-runit.sh "dovecot -F" \
 	&& addgroup postfix dovecot && addgroup dovecot postfix \
-	&& mtaconf modify_dovecot_conf
+	&& conf imgcfg_dovecot_passwdfile
 
 
 #
@@ -132,62 +132,26 @@ RUN	apk --no-cache --update add \
 	&& ln -sf /var/amavis/.spamassassin /root/.spamassassin \
 	&& mkdir -p /var/db/dkim && chown amavis: /var/db/dkim \
 	&& cp /etc/amavisd.conf /etc/amavisd.conf.dist \
-	&& mtaconf addafter /etc/amavisd.conf '^$mydomain' '$inet_socket_bind = \x27127.0.0.1\x27; # limit to ipv4 loopback, no ipv6 support' \
-	&& mtaconf addafter /etc/amavisd.conf '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \
-	&& mtaconf uncommentsection /etc/amavisd.conf "# ### http://www.clamav.net/" \
-	&& mtaconf replace /etc/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
-	&& mtaconf modify /etc/amavisd.conf '\$pid_file' = '"$MYHOME/amavisd.pid";' \
+	&& conf addafter /etc/amavisd.conf '^$mydomain' '$inet_socket_bind = \x27127.0.0.1\x27; # limit to ipv4 loopback, no ipv6 support' \
+	&& conf addafter /etc/amavisd.conf '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \
+	&& conf uncommentsection /etc/amavisd.conf "# ### http://www.clamav.net/" \
+	&& conf replace /etc/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
+	&& conf modify /etc/amavisd.conf '\$pid_file' = '"$MYHOME/amavisd.pid";' \
+	&& conf imgcfg_amavis_postfix
 	&& mkdir /run/clamav && chown clamav:clamav /run/clamav \
 	&& cp /etc/clamav/clamd.conf /etc/clamav/clamd.conf.dist \
 	&& cp /etc/clamav/freshclam.conf /etc/clamav/freshclam.conf.dist \
-	&& mtaconf modify /etc/clamav/clamd.conf Foreground yes \
-	&& mtaconf modify /etc/clamav/clamd.conf LogSyslog yes \
-	&& mtaconf modify /etc/clamav/clamd.conf LogFacility LOG_MAIL \
-	&& mtaconf comment /etc/clamav/clamd.conf LogFile \
-	&& mtaconf modify /etc/clamav/freshclam.conf Foreground yes \
-	&& mtaconf modify /etc/clamav/freshclam.conf LogSyslog yes \
-	&& mtaconf comment /etc/clamav/freshclam.conf UpdateLogFile \
-	&& mtaconf modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL \
+	&& conf modify /etc/clamav/clamd.conf Foreground yes \
+	&& conf modify /etc/clamav/clamd.conf LogSyslog yes \
+	&& conf modify /etc/clamav/clamd.conf LogFacility LOG_MAIL \
+	&& conf comment /etc/clamav/clamd.conf LogFile \
+	&& conf modify /etc/clamav/freshclam.conf Foreground yes \
+	&& conf modify /etc/clamav/freshclam.conf LogSyslog yes \
+	&& conf comment /etc/clamav/freshclam.conf UpdateLogFile \
+	&& conf modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL \
 	&& cp /etc/amavisd.conf /etc/amavisd.conf.build \
 	&& cp /etc/clamav/clamd.conf /etc/clamav/clamd.conf.build \
 	&& cp /etc/clamav/freshclam.conf /etc/clamav/freshclam.conf.build
-
-
-#
-#
-# target: dkim
-#
-# add opendkim
-# REMOVE THIS TARGET since amavisd can do dkim natively.
-#
-#
-
-FROM	milter AS dkim
-
-#
-# Install
-#
-# Configure Runit, a process manager
-#
-# Essential configuration of: opendkim
-#
-
-RUN	apk --no-cache --update add \
-	opendkim \
-	opendkim-utils \
-	postfix-policyd-spf-perl \
-	&& setup-runit.sh "opendkim -f" \
-	&& addgroup postfix opendkim \
-	&& mkdir /run/opendkim && chown opendkim: /run/opendkim \
-	&& cp /etc/opendkim/opendkim.conf /etc/opendkim/opendkim.conf.dist \
-	&& mtaconf removeline /etc/opendkim/opendkim.conf ^#Socket \
-	&& mtaconf modify /etc/opendkim/opendkim.conf Socket local:/run/opendkim/opendkim.sock \
-	&& mtaconf modify /etc/opendkim/opendkim.conf InternalHosts 172.16.0.0/12 \
-	&& mtaconf modify /etc/opendkim/opendkim.conf PidFile /run/opendkim/opendkim.pid \
-	&& mtaconf modify /etc/opendkim/opendkim.conf KeyFile /var/db/dkim/default.private \
-	&& mtaconf addafter /etc/opendkim/opendkim.conf Canonicalization "UserID\t\t\topendkim" \
-	&& mtaconf addafter /etc/opendkim/opendkim.conf UserID "UMask\t\t\t0111" \
-	&& opendkim-genkey -D /var/db/dkim && chown -R opendkim:opendkim /var/db/dkim
 
 
 #
@@ -216,9 +180,5 @@ RUN	apk --no-cache --update add \
 #
 # Copy utility scripts to image
 #
-
-#RUN	wget https://raw.githubusercontent.com/containous/traefik/master/contrib/scripts/dumpcerts.sh -O /usr/local/bin/dumpcerts.sh
-#RUN chmod a+x /usr/local/bin/dumpcerts.sh
-#RUN mtaconf modify /usr/local/bin/dumpcerts.sh "{acmefile}\")" "{acmefile}\" | fold -w 64)"
 
 COPY dumpcerts.sh /usr/local/bin/.

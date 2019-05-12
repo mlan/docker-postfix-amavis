@@ -26,7 +26,7 @@ Brief feature list follows below
 - Multi-staged build providing the images `full`, `milter`, `mda` and `mta`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
-- Built in utility script `mtaconf` helping configuring Postfix, AMaViS, SpamAssassin, ClamAV and Dovecot
+- Built in utility script `conf` helping configuring Postfix, AMaViS, SpamAssassin, ClamAV and Dovecot
 - Makefile which can build images and do some management and testing
 - Health check
 - Small image size based on [Alpine Linux](https://alpinelinux.org/)
@@ -232,10 +232,10 @@ The term "Forward Secrecy" (or sometimes "Perfect Forward Secrecy") is used to d
 
 Forward secrecy is accomplished by negotiating session keys using per-session cryptographically-strong random numbers that are not saved, and signing the exchange with long-term authentication keys. Later disclosure of the long-term keys allows impersonation of the key holder from that point on, but not recovery of prior traffic, since with forward secrecy, the discarded random key agreement inputs are not available to the attacker.
 
-The built in utility script `mtaconf` can be used to generate the Diffie-Hellman parameters needed for forward secrecy.
+The built in utility script `conf` can be used to generate the Diffie-Hellman parameters needed for forward secrecy.
 
 ```bash
-docker exec -it mail-mta mtaconf postconf_edh
+docker exec -it mail-mta conf update_postfix_dhparam
 ```
 
 ### Let’s Encrypt LTS certificates using Traefik
