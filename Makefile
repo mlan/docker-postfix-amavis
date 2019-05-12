@@ -19,10 +19,13 @@ TST_NET  ?= test-net
 TST_CLT  ?= test-client
 TST_SRV  ?= test-server
 TST_AUTH ?= test-auth
+TST_VCLT ?= $(TST_CLT)-var:/var
+TST_VSRV ?= $(TST_SRV)-var:/var
 TST_SLOG ?= 4
 TST_ALOG ?= 5
 TST_TZ   ?= UTC
-TST_ENV  ?= --network $(TST_NET) -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) -e TZ=$(TST_TZ)
+TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) -e TZ=$(TST_TZ) \
+		-e SA_TAG_LEVEL_DEFLT=-999 -e LOG_LEVEL=$(TST_ALOG)
 TST_MSG  ?= ---test-message---
 TST_KEY  ?= local_priv_key.pem
 TST_CRT  ?= local_ca_cert.pem
@@ -42,7 +45,7 @@ LDAP_MTH ?= "(&(objectclass=$(LDAP_UOB))(mail=%s))"
 CNT_NAME ?= postfix-amavis-mta
 CNT_PORT ?= -p 127.0.0.1:$(TST_PORT):25
 CNT_ENV  ?= --hostname $(TST_HOST) -e MAIL_BOXES="$(TST_BOX)"
-CNT_VOL  ?=
+CNT_VOL  ?= -
 CNT_DRV  ?=
 CNT_IP    = $(shell docker inspect -f \
 	'{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
@@ -88,94 +91,137 @@ ps:
 prune:
 	docker image prune
 	docker container prune
+	docker volume prune
 	docker network prune
 
-test-all: test_3 test_4 test_5 test_6 test_7 test_8
+test-all: test_1 test_2 test_3 test_4 test_5 test_6 test_7 test_8
 	
 
 test_%: test-up_% test-waitl_% test-mail_% test-down_%
 	
 
-test-up_3: test-up-net
+test-up_1: test-up-net
 	#
-	# test (3) basic mta function and virtual lookup
+	# test (1) basic mta function and virtual lookup
 	#
-	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX)" \
 		$(IMG_REPO):$(IMG_VER)-mta
-	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= \
 		$(IMG_REPO):$(IMG_VER)-mta
 
-test-up_4: test-up-net test-up-auth
+test-up_2: test-up-net test-up-auth
 	#
-	# test (4) basic mta function and ldap lookup
+	# test (2) basic mta function and ldap lookup
 	#
-	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e LDAP_HOST=$(TST_AUTH) -e LDAP_USER_BASE=ou=$(LDAP_UOU),$(LDAP_BAS) \
 		-e LDAP_QUERY_FILTER_USER=$(LDAP_MTH) \
 		$(IMG_REPO):$(IMG_VER)-mta
-	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= \
 		$(IMG_REPO):$(IMG_VER)-mta
 
-test-up_5: test-up-net test-cert-gen
+test-up_3: test-up-net test-cert-gen
 	#
-	# test (5) basic tls
+	# test (3) basic tls
 	#
-	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX)" \
 		-e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT) \
 		$(IMG_REPO):$(IMG_VER)-mta
 	docker cp $(TST_KEY) $(TST_SRV):$(TST_PKEY)
 	docker cp $(TST_CRT) $(TST_SRV):$(TST_PCRT)
-	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
 		$(IMG_REPO):$(IMG_VER)-mta
 
-test-up_6: test-up-net test-cert-gen
+test-up_4: test-up-net test-cert-gen
 	#
-	# test (6) basic sasl
+	# test (4) basic sasl
 	#
-	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX)" \
 		-e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT) \
 		-e SMTPD_SASL_CLIENTAUTH="$(TST_USR1):{plain}$(TST_PWD1) $(TST_USR2):{plain}$(TST_PWD2)" \
 		$(IMG_REPO):$(IMG_VER)-mda
 	docker cp $(TST_KEY) $(TST_SRV):$(TST_PKEY)
 	docker cp $(TST_CRT) $(TST_SRV):$(TST_PCRT)
-	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e SMTP_RELAY_HOSTAUTH="[$(TST_SRV)]:587 $(TST_USR2):$(TST_PWD2)" \
 		-e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
 		$(IMG_REPO):$(IMG_VER)-mta
 
-test-up_7: test-up-net
+test-up_5: test-up-net
 	#
-	# test (7) basic milter function
+	# test (5) basic milter function
 	#
-	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
-		-e MAIL_BOXES="$(TST_BOX)" -e SA_TAG_LEVEL_DEFLT=-999 \
-		-e LOG_LEVEL=$(TST_ALOG) \
+	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
+		-e MAIL_BOXES="$(TST_BOX)" \
 		$(IMG_REPO):$(IMG_VER)-milter
-	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e LOG_LEVEL=$(TST_ALOG) \
 		$(IMG_REPO):$(IMG_VER)-milter
 
-test-up_8: test-up-net
+test-up_6: test-up-net
 	#
-	# test (8) dkim and multiple domains
+	# test (6) dkim and multiple domains
 	#
-	docker run --rm -d --name $(TST_SRV) $(TST_ENV) --hostname srv.$(TST_DOM) \
+	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX2)" -e MAIL_DOMAIN="$(TST_DOM) $(TST_DOM2)" \
+		-v $(TST_SRV)-var:/var -v $(TST_SRV)-etc:/etc \
 		$(IMG_REPO):$(IMG_VER)-full
-	docker run --rm -d --name $(TST_CLT) $(TST_ENV) --hostname cli.$(TST_DOM) \
+	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e MAIL_DOMAIN="$(TST_DOM)" \
+		-v $(TST_CLT)-var:/var -v $(TST_CLT)-etc:/etc \
+		$(IMG_REPO):$(IMG_VER)-full
+
+test-up_7: test-up-net test_6
+	#
+	# test (7) persistent /var and /etc no env given
+	#
+	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
+		--network $(TST_NET) \
+		-v $(TST_SRV)-var:/var -v $(TST_SRV)-etc:/etc \
+		$(IMG_REPO):$(IMG_VER)-full
+	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
+		--network $(TST_NET) \
+		-v $(TST_SRV)-var:/var -v $(TST_SRV)-etc:/etc \
+		$(IMG_REPO):$(IMG_VER)-full
+
+test-up_8: test-up-net test_7
+	#
+	# test (8) persistent /var and /etc
+	#
+	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
+		-e MAIL_BOXES="$(TST_BOX2)" -e MAIL_DOMAIN="$(TST_DOM) $(TST_DOM2)" \
+		-v $(TST_SRV)-var:/var -v $(TST_SRV)-etc:/etc \
+		$(IMG_REPO):$(IMG_VER)-full
+	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
+		--network $(TST_NET) $(TST_ENV) \
+		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e MYDESTINATION= -e MAIL_DOMAIN="$(TST_DOM)" \
+		-v $(TST_CLT)-var:/var -v $(TST_CLT)-etc:/etc \
 		$(IMG_REPO):$(IMG_VER)-full
 
 test-mail: test-mail_0
@@ -186,10 +232,10 @@ test-mail_%: test-mail-send_% test-waits_% test-mail-read_%
 	#
 
 test-waits_%:
-	if [ $* -ge 7 ]; then sleep $(TST_W8S2); else sleep $(TST_W8S1); fi
+	if [ $* -ge 5 ]; then sleep $(TST_W8S2); else sleep $(TST_W8S1); fi
 
 test-waitl_%:
-	if [ $* -ge 7 ]; then sleep $(TST_W8L2); else sleep $(TST_W8L1); fi
+	if [ $* -ge 5 ]; then sleep $(TST_W8L2); else sleep $(TST_W8L1); fi
 
 test-up-net:
 	docker network create $(TST_NET) 2>/dev/null || true
@@ -198,7 +244,9 @@ test-down-net:
 	docker network rm $(TST_NET) || true
 
 test-down: test-down_0
-	docker network rm $(TST_NET) || true
+	docker network rm $(TST_NET) 2>/dev/null || true
+	docker volume rm $(TST_SRV)-var $(TST_SRV)-etc \
+		$(TST_CLT)-var $(TST_CLT)-etc 2>/dev/null || true
 
 test-down_%:
 	docker stop $(TST_CLT) $(TST_SRV) $(TST_AUTH) 2>/dev/null || true
@@ -214,13 +262,13 @@ test-auth-srv:
 	docker exec -it $(TST_SRV) doveadm auth lookup $(TST_USR2)
 
 test-mail-send_%:
-	$(eval tst_dom := $(shell if [ $* -ge 8 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
+	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
 	printf "subject:Test\nfrom:$(TST_SADR)@$(TST_DOM)\n$(TST_MSG)$*\n" \
 	| docker exec -i $(TST_CLT) sendmail $(TST_RADR)@$(tst_dom)
 
 test-mail-read_%:
-	$(eval tst_str := $(shell if [ $* -ge 8 ]; then echo DKIM-Signature; else echo ^$(TST_MSG)$*; fi ))
-	$(eval tst_dom := $(shell if [ $* -ge 8 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
+	$(eval tst_str := $(shell if [ $* -ge 9 ]; then echo DKIM-Signature; else echo ^$(TST_MSG)$*; fi ))
+	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
 	docker exec -it $(TST_SRV) cat /var/mail/$(TST_RADR)@$(tst_dom) | grep $(tst_str)
 
 $(TST_CRT): $(TST_KEY)

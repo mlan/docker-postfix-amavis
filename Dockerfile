@@ -13,7 +13,7 @@ ARG	REL=latest
 FROM	$DIST:$REL AS mta
 LABEL	maintainer=mlan
 
-ENV	SYSLOG_LEVEL=4
+ARG	SYSLOG_LEVEL=4
 
 #
 # Copy utility scripts to image
