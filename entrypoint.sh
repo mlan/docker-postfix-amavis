@@ -4,7 +4,9 @@
 # config
 #
 
-docker_build_runit_root=${docker_build_runit_root-/etc/service}
+docker_build_runit_dir=${docker_build_runit_dir-/etc/service}
+docker_build_persist_dir=${docker_build_persist_dir-/srv}
+docker_config_lock=${docker_config_lock-/etc/postfix/docker-config-lock}
 postfix_sasl_passwd=${postfix_sasl_passwd-/etc/postfix/sasl-passwords}
 postfix_virt_mailbox=${postfix_virt_mailbox-/etc/postfix/virt-users}
 postfix_virt_domain=${postfix_virt_domain-/etc/postfix/virt-domains}
@@ -178,65 +180,16 @@ uniquelines() {
 _chowncond() {
 	local user=$1
 	local dir=$2
-	if [ -n "$(find $dir ! -user $user -print -exec chown -h $user: {} \;)" ]; then
-		scr_info 0 "Changed owner to $user for some files in $dir"
-	fi
-}
-
-#
-# run time commands
-#
-
-_isvirgin() {
-	# true if apk is installed and conf file is untouched
-	# if CONF_UPDATE is defined also altered conf file will be updated
-	local apk=$1
-	local cf=$2
-	apk -e info $apk &>/dev/null && (diff $cf.build $cf >/dev/null || [ -z ${CONF_UPDATE+x} ])
-}
-
-cntcfg_postfix_smtp_auth_pwfile() {
-	local hostauth=${1-$SMTP_RELAY_HOSTAUTH}
-	local host=${hostauth% *}
-	local auth=${hostauth#* }
-	if [ -n "$host" ]; then
-		scr_info 0 "Using SMTP relay: $host"
-		postconf -e relayhost=$host
-		if [ -n "$auth" ]; then
-			postconf -e smtp_sasl_auth_enable=yes
-			postconf -e smtp_sasl_password_maps=hash:$postfix_sasl_passwd
-			postconf -e smtp_sasl_security_options=noanonymous
-			echo "$hostauth" > $postfix_sasl_passwd
-			postmap hash:$postfix_sasl_passwd
+	if id $user > /dev/null 2>&1; then
+		if [ -n "$(find $dir ! -user $user -print -exec chown -h $user: {} \;)" ]; then
+			scr_info 0 "Changed owner to $user for some files in $dir"
 		fi
-	else
-		scr_info 0 "No SMTP relay defined"
 	fi
 }
 
-cntcfg_dovecot_smtpd_auth_pwfile() {
-	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
-	# dovecot need to be installed
-	if (apk -e info dovecot &>/dev/null && [ -n "$clientauth" ]); then
-		scr_info 0 "Enabling client SASL via submission"
-		# create client passwd file used for autentication
-		for entry in $clientauth; do
-			# consider persist
-			echo $entry >> $dovecot_users
-		done
-		# enable sasl auth on the submission port
-		postconf -e smtpd_sasl_auth_enable=yes
-		postconf -M "submission/inet=submission inet n - n - - smtpd"
-		postconf -P "submission/inet/smtpd_sasl_auth_enable=yes"
-		postconf -P "submission/inet/smtpd_sasl_type=dovecot"
-		postconf -P "submission/inet/smtpd_sasl_path=private/auth"
-		postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
-		postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
-		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
-	fi
-}
-
-doveadm_pw() { doveadm pw -p $1 ;}
+#
+# package install functions
+#
 
 imgcfg_dovecot_passwdfile() {
 	# run during build time
@@ -265,27 +218,7 @@ imgcfg_dovecot_passwdfile() {
 	[ -e ${1-$dovecot_cf} ] && cp $dovecot_cf $dovecot_cf.build
 }
 
-cntcfg_postfix_domains() {
-	# configure domains if we have recipients
-	local domains=${MAIL_DOMAIN-$(hostname -d)}
-	if [ -n "$domains" ] && ([ -n "$LDAP_HOST" ] || [ -n "$MAIL_BOXES" ]); then
-		scr_info 0 "Configuring postfix for domains $domains"
-		if [ $(echo $domains | wc -w) -gt 1 ]; then
-			for domain in $domains; do
-				echo "$domain #domain" >> $postfix_virt_domain
-			done
-			postconf virtual_mailbox_domains=hash:$postfix_virt_domain
-			postmap  hash:$postfix_virt_domain
-		else
-			postconf mydomain=$domains
-			postconf virtual_mailbox_domains='$mydomain'
-		fi
-	fi
-}
-
 imgcfg_amavis_postfix() {
-	if apk -e info amavisd-new &>/dev/null
-	then
 	scr_info 0 "Configuring postfix-amavis"
 	postconf -e content_filter=smtp-amavis:[localhost]:10024
 	postconf -M "smtp-amavis/unix=smtp-amavis unix - - n - 2 smtp"
@@ -316,6 +249,118 @@ imgcfg_amavis_postfix() {
 	postconf -P "localhost:10025/inet/receive_override_options=no_header_body_checks,no_unknown_recipient_checks"
 	postconf -P "pickup/unix/content_filter="
 	postconf -P "pickup/unix/receive_override_options=no_header_body_checks"
+}
+
+imgdir_persist() {
+	mkdir -p $docker_build_persist_dir/etc
+	mkdir -p $docker_build_persist_dir/var
+	for dir in postfix amavis dovecot clamav mail; do
+		mkdir -p $docker_build_persist_dir/etc/$dir
+		ln -s $docker_build_persist_dir/etc/$dir /etc/$dir
+	done
+	for dir in /spool/postfix amavis dovecot clamav mail; do
+		mkdir -p $docker_build_persist_dir/var/$dir
+		ln -s $docker_build_persist_dir/var/$dir /var/$dir
+	done
+}
+
+#
+# package config procedure
+#
+
+_need_config() { [ ! -f "$docker_config_lock" ] || [ -n "$FORCE_CONFIG" ] ;}
+	# false if lock file and FORCE_CONFIG empty
+
+_is_installed() { apk -e info $1 &>/dev/null ;} # true if apk is installed
+
+lock_config() {
+	if [ -z "$FORCE_CONFIG" ]; then
+		echo "$(date) $(basename $0): Virgin config completed" > "$docker_config_lock"
+	else
+		echo "$(date) $(basename $0): Forced config completed" > "$docker_config_lock"
+	fi
+}
+
+cntcfg_all() {
+	if _need_config; then
+		cntcfg_acme_postfix_tls_cert
+		cntcfg_amavis_domains
+		cntcfg_amavis_dkim
+		cntcfg_amavis_apply_envvars
+		cntcfg_dovecot_smtpd_auth_pwfile
+		cntcfg_postfix_domains
+		cntcfg_postfix_smtp_auth_pwfile
+		cntcfg_postfix_mailbox_auth_file
+		cntcfg_postfix_mailbox_auth_ldap
+		cntcfg_postfix_tls_cert
+		cntcfg_postfix_apply_envvars
+		cntcfg_spamassassin_update
+		lock_config
+	else
+		scr_info 0 "Found config lock file, so not touching configuration"
+	fi
+}
+
+#
+# package config units
+#
+
+cntcfg_postfix_smtp_auth_pwfile() {
+	local hostauth=${1-$SMTP_RELAY_HOSTAUTH}
+	local host=${hostauth% *}
+	local auth=${hostauth#* }
+	if [ -n "$host" ]; then
+		scr_info 0 "Using SMTP relay: $host"
+		postconf -e relayhost=$host
+		if [ -n "$auth" ]; then
+			postconf -e smtp_sasl_auth_enable=yes
+			postconf -e smtp_sasl_password_maps=hash:$postfix_sasl_passwd
+			postconf -e smtp_sasl_security_options=noanonymous
+			echo "$hostauth" > $postfix_sasl_passwd
+			postmap hash:$postfix_sasl_passwd
+		fi
+	else
+		scr_info 0 "No SMTP relay defined"
+	fi
+}
+
+cntcfg_dovecot_smtpd_auth_pwfile() {
+	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
+	# dovecot need to be installed
+	if (_is_installed dovecot && [ -n "$clientauth" ]); then
+		scr_info 0 "Enabling client SASL via submission"
+		# create client passwd file used for autentication
+		for entry in $clientauth; do
+			# consider persist
+			echo $entry >> $dovecot_users
+		done
+		# enable sasl auth on the submission port
+		postconf -e smtpd_sasl_auth_enable=yes
+		postconf -M "submission/inet=submission inet n - n - - smtpd"
+		postconf -P "submission/inet/smtpd_sasl_auth_enable=yes"
+		postconf -P "submission/inet/smtpd_sasl_type=dovecot"
+		postconf -P "submission/inet/smtpd_sasl_path=private/auth"
+		postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
+		postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
+		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
+	fi
+}
+
+cntcfg_postfix_domains() {
+	# configure domains if we have recipients
+	local domains=${MAIL_DOMAIN-$(hostname -d)}
+	if [ -n "$domains" ] && ([ -n "$LDAP_HOST" ] || [ -n "$MAIL_BOXES" ]); then
+		scr_info 0 "Configuring postfix for domains $domains"
+		if [ $(echo $domains | wc -w) -gt 1 ]; then
+			for domain in $domains; do
+				echo "$domain #domain" >> $postfix_virt_domain
+			done
+			postconf virtual_mailbox_domains=hash:$postfix_virt_domain
+			postmap  hash:$postfix_virt_domain
+		else
+			postconf mydomain=$domains
+			postconf virtual_mailbox_domains='$mydomain'
+		fi
 	fi
 }
 
@@ -323,7 +368,7 @@ cntcfg_amavis_domains() {
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	local domain_main=$(echo $domains | sed 's/\s.*//')
 	local domain_extra=$(echo $domains | sed 's/[^ ]* *//' | sed 's/[^ ][^ ]*/"&"/g' | sed 's/ /, /g')
-	if apk -e info amavisd-new &>/dev/null; then
+	if _is_installed amavisd-new; then
 		scr_info 0 "Configuring amavis for domains $domains"
 		modify $amavis_cf '\$mydomain' = "'"$domain_main"';"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
@@ -344,7 +389,7 @@ cntcfg_amavis_dkim() {
 	local keyfile=$dkim_dir/$domain_main.$selector.privkey.pem
 	local txtfile=$dkim_dir/$domain_main.$selector._domainkey.txt
 	local keystring="$DKIM_PRIVATEKEY"
-	if apk -e info amavisd-new &>/dev/null; then
+	if _is_installed amavisd-new; then
 		scr_info 0 "Setting dkim selector and domain to $selector and $domain_main"
 		# insert config statements just before last line
 		local lastline="$(sed -i -e '$ w /dev/stdout' -e '$d' $amavis_cf)"
@@ -460,7 +505,7 @@ cntcfg_acme_postfix_tls_cert() {
 	# we are potentially updating $SMTPD_TLS_CERT_FILE and $SMTPD_TLS_KEY_FILE
 	# here so we need to run this func before cntcfg_postfix_tls_cert and cntcfg_postfix_apply_envvars
 	ACME_FILE=${ACME_FILE-/acme/acme.json}
-	if ([ -x $(which dumpcerts.sh) ] && [ -f $ACME_FILE ]); then
+	if (_is_installed inotify-tools && [ -f $ACME_FILE ]); then
 		scr_info 0 "Configuring acme-tls"
 		HOSTNAME=${HOSTNAME-$(hostname)}
 		ACME_TLS_DIR=${ACME_TLS_DIR-/tmp/ssl}
@@ -468,7 +513,7 @@ cntcfg_acme_postfix_tls_cert() {
 		ACME_TLS_KEY_FILE=$ACME_TLS_DIR/private/${HOSTNAME}.key
 		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$ACME_TLS_CERT_FILE}
 		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$ACME_TLS_KEY_FILE}
-		local runit_dir=$docker_build_runit_root/acme
+		local runit_dir=$docker_build_runit_dir/acme
 		mkdir -p $postfix_smtpd_tls_dir $ACME_TLS_DIR $runit_dir
 		cat <<-! > $runit_dir/run
 			#!/bin/bash -e
@@ -497,23 +542,6 @@ cntcfg_postfix_tls_cert() {
 	fi
 }
 
-update_postfix_dhparam() {
-	# Optionally generate non-default Postfix SMTP server EDH parameters for improved security
-	# note, since 2015, 512 bit export ciphers are no longer used
-	# this takes a long time. run this manually once the container is up by:
-	# conf update_postfix_dhparam
-	# smtpd_tls_dh1024_param_file
-	local bits=${1-2048}
-	if apk -e info openssl &>/dev/null; then
-		scr_info 0 "Regenerating postfix edh $bits bit parameters"
-		mkdir -p $postfix_smtpd_tls_dir
-		openssl dhparam -out $postfix_smtpd_tls_dir/dh$bits.pem $bits
-		postconf smtpd_tls_dh1024_param_file=$postfix_smtpd_tls_dir/dh$bits.pem
-	else
-		scr_info 1 "Cannot regenerate edh since openssl is not installed"
-	fi
-}
-
 _amavis_envvar() {
 	# allow amavis parameters to be modified using environment variables
 	local env_var="$1"
@@ -538,20 +566,53 @@ cntcfg_postfix_apply_envvars() {
 			scr_info 0 "Setting postfix parameter $lcase_var = $env_val"
 			postconf $lcase_var="$env_val"
 		fi
-		_amavis_envvar $env_var $lcase_var
+#		_amavis_envvar $env_var $lcase_var
 	done
 }
 
 cntcfg_amavis_apply_envvars() {
-	# fix me
+	local env_vars="$(export -p | sed -r 's/export ([^=]+).*/\1/g')"
+	local lcase_var env_val
+	if _is_installed amavisd-new; then
+		for env_var in $env_vars; do
+			lcase_var="$(echo $env_var | tr '[:upper:]' '[:lower:]')"
+			if [ -z "${amavis_var##*$env_var*}" ]; then
+				env_val="$(eval echo \$$env_var)"
+				scr_info 0 "Setting amavis parameter $lcase_var = $env_val"
+				modify $amavis_cf '\$'$lcase_var = "$env_val;"
+			fi
+		done
+	fi
 }
 
 cntcfg_spamassassin_update() {
-	if apk -e info spamassassin &>/dev/null; then
+	# Download rules for spamassassin at start up.
+	# There is also an daily cron job that updates these.
+	if _is_installed spamassassin; then
 		scr_info 0 "Updating rules for spamassassin"
 		( sa-update ) &
 	fi
 }
+
+cntdir_chown_home() {
+	_chowncond $postfix_runas $postfix_home
+	_chowncond $postfix_runas $mail_dir
+	_chowncond $amavis_runas  $amavis_home
+}
+
+cntdir_prune_pidfiles() {
+	for dir in /run /var/spool/postfix/pid /var/amavis; do
+		if [ -n "$(find $dir -type f -name "*.pid" -exec rm {} \;)" ]; then
+			scr_info 0 "Removed orphan pid files in $dir"
+		fi
+	done
+}
+
+#
+# run time utility commands
+#
+
+doveadm_pw() { doveadm pw -p $1 ;}
 
 update_loglevel() {
 	local loglevel=${1-$SYSLOG_LEVEL}
@@ -563,47 +624,22 @@ update_loglevel() {
 	fi
 }
 
-cntdir_chown_home() {
-	_chowncond $postfix_runas $postfix_home
-	_chowncond $postfix_runas $mail_dir
-	_chowncond $amavis_runas  $amavis_home
-}
-
-#
-# package config suites
-#
-
-cntcfg_acme() {
-	if _isvirgin inotify-tools $postfix_cf; then
-		cntcfg_acme_postfix_tls_cert
+update_postfix_dhparam() {
+	# Optionally generate non-default Postfix SMTP server EDH parameters for improved security
+	# note, since 2015, 512 bit export ciphers are no longer used
+	# this takes a long time. run this manually once the container is up by:
+	# conf update_postfix_dhparam
+	# smtpd_tls_dh1024_param_file
+	local bits=${1-2048}
+	if _is_installed openssl; then
+		scr_info 0 "Regenerating postfix edh $bits bit parameters"
+		mkdir -p $postfix_smtpd_tls_dir
+		openssl dhparam -out $postfix_smtpd_tls_dir/dh$bits.pem $bits
+		postconf smtpd_tls_dh1024_param_file=$postfix_smtpd_tls_dir/dh$bits.pem
+	else
+		scr_info 1 "Cannot regenerate edh since openssl is not installed"
 	fi
 }
-
-cntcfg_amavis() {
-	if _isvirgin amavisd-new $amavis_cf; then
-		cntcfg_amavis_domains
-		cntcfg_amavis_dkim
-		cntcfg_amavis_apply_envvars
-	fi
-}
-
-cntcfg_dovecot() {
-	if _isvirgin dovecot $dovecot_cf; then
-		cntcfg_dovecot_smtpd_auth_pwfile
-	fi
-}
-
-cntcfg_postfix() {
-	if _isvirgin postfix $postfix_cf; then
-		cntcfg_postfix_domains
-		cntcfg_postfix_smtp_auth_pwfile
-		cntcfg_postfix_mailbox_auth_file
-		cntcfg_postfix_mailbox_auth_ldap
-		cntcfg_postfix_tls_cert
-		cntcfg_postfix_apply_envvars
-	fi
-}
-
 
 #
 # allow functions to be accessed on cli
@@ -626,44 +662,21 @@ scr_cli_and_exit() {
 
 
 #
-# allow command line interface
+# run config
 #
 
 scr_formats
 scr_cli_and_exit "$@"
 
-#
-# configure services
-#
-
-cntcfg_acme_postfix_tls_cert
-
-cntcfg_amavis_domains
-cntcfg_amavis_dkim
-cntcfg_amavis_apply_envvars
-
-cntcfg_dovecot_smtpd_auth_pwfile
-
-cntcfg_postfix_domains
-cntcfg_postfix_smtp_auth_pwfile
-cntcfg_postfix_mailbox_auth_file
-cntcfg_postfix_mailbox_auth_ldap
-cntcfg_postfix_tls_cert
-cntcfg_postfix_apply_envvars
-
-cntdir_chown_home
-
-#
-# Download rules for spamassassin at start up.
-# There is also an daily cron job that updates these.
-#
+#cntdir_chown_home
+cntdir_prune_pidfiles
+cntcfg_all
 
 update_loglevel
-cntcfg_spamassassin_update
 
 #
 # start services
 #
 
-exec runsvdir -P $docker_build_runit_root
+exec runsvdir -P $docker_build_runit_dir
 

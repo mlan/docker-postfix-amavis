@@ -137,7 +137,7 @@ RUN	apk --no-cache --update add \
 	&& conf uncommentsection /etc/amavisd.conf "# ### http://www.clamav.net/" \
 	&& conf replace /etc/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
 	&& conf modify /etc/amavisd.conf '\$pid_file' = '"$MYHOME/amavisd.pid";' \
-	&& conf imgcfg_amavis_postfix
+	&& conf imgcfg_amavis_postfix \
 	&& mkdir /run/clamav && chown clamav:clamav /run/clamav \
 	&& cp /etc/clamav/clamd.conf /etc/clamav/clamd.conf.dist \
 	&& cp /etc/clamav/freshclam.conf /etc/clamav/freshclam.conf.dist \
@@ -151,7 +151,9 @@ RUN	apk --no-cache --update add \
 	&& conf modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL \
 	&& cp /etc/amavisd.conf /etc/amavisd.conf.build \
 	&& cp /etc/clamav/clamd.conf /etc/clamav/clamd.conf.build \
-	&& cp /etc/clamav/freshclam.conf /etc/clamav/freshclam.conf.build
+	&& cp /etc/clamav/freshclam.conf /etc/clamav/freshclam.conf.build \
+	&& cp /etc/postfix/main.cf /etc/postfix/main.cf.build \
+	&& cp /etc/postfix/master.cf /etc/postfix/master.cf.build
 
 
 #

@@ -6,9 +6,9 @@
 #
 #
 
-# use /etc/service if $docker_build_runit_root not already defined
-docker_build_runit_root=${docker_build_runit_root-/etc/service}
-#docker_build_svlog_root=${docker_build_svlog_root-/var/log/sv}
+# use /etc/service if $docker_build_runit_dir not already defined
+docker_build_runit_dir=${docker_build_runit_dir-/etc/service}
+#docker_build_svlog_dir=${docker_build_svlog_dir-/var/log/sv}
 
 #
 # Define helpers
@@ -27,8 +27,8 @@ init_service() {
 			;;
 	esac
 	local cmd="$1"
-	local runit_dir=$docker_build_runit_root/${cmd##*/}
-	local svlog_dir=$docker_build_svlog_root/${cmd##*/}
+	local runit_dir=$docker_build_runit_dir/${cmd##*/}
+	local svlog_dir=$docker_build_svlog_dir/${cmd##*/}
 	shift
 	cmd=$(which $cmd)
 	if [ ! -z "$cmd" ]; then
@@ -40,7 +40,7 @@ init_service() {
 			exec $cmd $@
 		!
 		chmod +x $runit_dir/run
-		if [ -n "$docker_build_svlog_root" ]; then
+		if [ -n "$docker_build_svlog_dir" ]; then
 			mkdir -p $runit_dir/log $svlog_dir
 			cat <<-! > $runit_dir/log/run
 				#!/bin/sh
@@ -53,7 +53,7 @@ init_service() {
 
 down_service() {
 	local cmd=$1
-	touch $docker_build_runit_root/$cmd/down
+	touch $docker_build_runit_dir/$cmd/down
 	}
 
 #
