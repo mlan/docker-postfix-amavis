@@ -25,7 +25,7 @@ TST_SLOG ?= 4
 TST_ALOG ?= 5
 TST_TZ   ?= UTC
 TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) -e TZ=$(TST_TZ) \
-		-e SA_TAG_LEVEL_DEFLT=-999 -e LOG_LEVEL=$(TST_ALOG)
+		-e SA_TAG_LEVEL_DEFLT=-999 -e SA_DEBUG=1 -e LOG_LEVEL=$(TST_ALOG)
 TST_MSG  ?= ---test-message---
 TST_KEY  ?= local_priv_key.pem
 TST_CRT  ?= local_ca_cert.pem
@@ -97,7 +97,7 @@ prune:
 test-all: test_1 test_2 test_3 test_4 test_5 test_6 test_7 test_8
 	
 
-test_%: test-up_% test-waitl_% test-mail_% test-down_%
+test_%: test-up_% test-waitl_% test-logs_% test-mail_% test-down_%
 	
 
 test-up_1: test-up-net
@@ -186,42 +186,42 @@ test-up_6: test-up-net
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX2)" -e MAIL_DOMAIN="$(TST_DOM) $(TST_DOM2)" \
-		-v $(TST_SRV)-var:/var -v $(TST_SRV)-etc:/etc \
+		-v $(TST_SRV)-srv:/srv \
 		$(IMG_REPO):$(IMG_VER)-full
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e MAIL_DOMAIN="$(TST_DOM)" \
-		-v $(TST_CLT)-var:/var -v $(TST_CLT)-etc:/etc \
+		-v $(TST_CLT)-srv:/srv \
 		$(IMG_REPO):$(IMG_VER)-full
 
 test-up_7: test-up-net test_6
 	#
-	# test (7) persistent /var and /etc no env given
+	# test (7) persistent /srv no env given
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) \
-		-v $(TST_SRV)-var:/var -v $(TST_SRV)-etc:/etc \
+		-v $(TST_SRV)-srv:/srv \
 		$(IMG_REPO):$(IMG_VER)-full
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) \
-		-v $(TST_SRV)-var:/var -v $(TST_SRV)-etc:/etc \
+		-v $(TST_SRV)-srv:/srv \
 		$(IMG_REPO):$(IMG_VER)-full
 
 test-up_8: test-up-net test_7
 	#
-	# test (8) persistent /var and /etc
+	# test (8) persistent /srv
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX2)" -e MAIL_DOMAIN="$(TST_DOM) $(TST_DOM2)" \
-		-v $(TST_SRV)-var:/var -v $(TST_SRV)-etc:/etc \
+		-v $(TST_SRV)-srv:/srv \
 		$(IMG_REPO):$(IMG_VER)-full
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e MAIL_DOMAIN="$(TST_DOM)" \
-		-v $(TST_CLT)-var:/var -v $(TST_CLT)-etc:/etc \
+		-v $(TST_CLT)-srv:/srv \
 		$(IMG_REPO):$(IMG_VER)-full
 
 test-mail: test-mail_0
@@ -230,6 +230,9 @@ test-mail_%: test-mail-send_% test-waits_% test-mail-read_%
 	#
 	# test ($*) successful
 	#
+
+test-logs_%:
+	docker container logs $(TST_SRV) | grep '(entrypoint.sh)' || true
 
 test-waits_%:
 	if [ $* -ge 5 ]; then sleep $(TST_W8S2); else sleep $(TST_W8S1); fi
@@ -245,8 +248,7 @@ test-down-net:
 
 test-down: test-down_0
 	docker network rm $(TST_NET) 2>/dev/null || true
-	docker volume rm $(TST_SRV)-var $(TST_SRV)-etc \
-		$(TST_CLT)-var $(TST_CLT)-etc 2>/dev/null || true
+	docker volume rm $(TST_SRV)-srv $(TST_CLT)-srv 2>/dev/null || true
 
 test-down_%:
 	docker stop $(TST_CLT) $(TST_SRV) $(TST_AUTH) 2>/dev/null || true

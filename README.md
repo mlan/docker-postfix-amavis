@@ -17,6 +17,7 @@ Brief feature list follows below
 - Sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail)
 - SMTP client authentication on the submission port 587 using [Dovecot](https://www.dovecot.org/)
 - Hooks for integrating [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using the reverse proxy [Traefik](https://docs.traefik.io/)
+- Consolidated configuration and run data under `/srv` to facilitate persistent storage
 - Simplified configuration of mailbox table lookup using environment variables
 - Simplified configuration of [LDAP](https://en.wikipedia.org/wiki/Lightweight_Directory_Access_Protocol) mailbox and alias lookup using environment variables
 - Simplified configuration of [SMTP](https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol) relay using environment variables
@@ -50,7 +51,7 @@ Often you want to configure Postfix and its components. There are different meth
 If you want to test the image you can start it using the destination domain `example.com` and table mail boxes for info@example.com and abuse@example.com using the shell command below.
 
 ```bash
-docker run -d --name mail-mta --hostname mx1.example.com -e MAIL_BOXES="info@example.com abuse@example.com" -p 25:25 mlan/postfix-amavis
+docker run -d --name mail-mta --hostname mx1.example.com -e MAIL_BOXES="info@example.com abuse@example.com" -p 127.0.0.1:25:25 mlan/postfix-amavis
 ```
 
 ## Docker compose example
@@ -109,7 +110,7 @@ services:
       - DKIM_SELECTOR=${DKIM_SELECTOR-default}
       - SYSLOG_LEVEL=4
     volumes:
-      - mail-mta:/var
+      - mail-mta:/srv
 
   mail-db:
     image: mariadb
@@ -160,15 +161,25 @@ make test
 
 ## Environment variables
 
-When you create the `mlan/postfix-amavis` container, you can configure the services by passing one or more environment variables or arguments on the docker run command line. Note that any preexisting configuration files within the container will be updated.
+When you create the `mlan/postfix-amavis` container, you can configure the services by passing one or more environment variables or arguments on the docker run command line. Once the services has been configured a lock file is created, to avoid repeating the configuration procedure when the container is restated. In the rare event that want to modify the configuration of an existing container you can override the default behavior by setting `FORCE_CONFIG` to a no-empty string.
 
-To see all available configuration variables you can run `postconf` within the container, for example like this:
+To see all available postfix configuration variables you can run `postconf` within the container, for example like this:
 
 ```bash
 docker exec -it mail-mta postconf
 ```
 
-If you do, you will notice that configuration variable names are all lower case, but they will be matched with all uppercase environment variables by the container entrypoint script.
+If you do, you will notice that configuration variable names are all lower case, but they will be matched with all uppercase environment variables by the container `entrypoint.sh` script.
+
+## Persistent storage
+
+By default, docker will store the configuration and run data within the container. This has the drawback that the configurations and queued and quarantined mail are lost together with the container should it be deleted. It can therefore be a good idea to use docker volumes and mount the run directories and/or the configuration directories there so that the data will survive a container deletion.
+
+To facilitate such approach, to achieve persistent storage, the configuration and run directories of the services has been consolidated to `/srv/etc` and `/srv/var` respectively.  So if you to have chosen to use both persistent configuration and run data you can run the container like this:
+
+```
+docker run -d --name mail-mta -v mail-mta:/srv -p 127.0.0.1:25:25 mlan/postfix-amavis
+```
 
 ## Outgoing SMTP relay
 

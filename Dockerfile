@@ -46,12 +46,11 @@ RUN	apk --update add \
 	"crond -f -c /etc/crontabs" \
 	"postfix start-fg" \
 	&& mkdir -p /var/mail && chown postfix: /var/mail \
-	&& cp /etc/postfix/main.cf /etc/postfix/main.cf.dist \
-	&& cp /etc/postfix/master.cf /etc/postfix/master.cf.dist \
+	&& conf imgcfg_cpfile dist /etc/postfix/main.cf /etc/postfix/master.cf \
 	&& postconf -e mynetworks_style=subnet \
 	&& rm -rf /var/cache/apk/* \
-	&& cp /etc/postfix/main.cf /etc/postfix/main.cf.build \
-	&& cp /etc/postfix/master.cf /etc/postfix/master.cf.build
+	&& conf imgcfg_cpfile bld /etc/postfix/main.cf /etc/postfix/master.cf \
+	&& conf imgdir_persist /etc/postfix /var/spool/postfix /var/mail
 
 #
 # state standard smtp port
@@ -89,7 +88,8 @@ FROM	mta AS mda
 RUN	apk --no-cache --update add dovecot \
 	&& setup-runit.sh "dovecot -F" \
 	&& addgroup postfix dovecot && addgroup dovecot postfix \
-	&& conf imgcfg_dovecot_passwdfile
+	&& conf imgcfg_dovecot_passwdfile \
+	&& conf imgdir_persist /etc/dovecot
 
 
 #
@@ -128,19 +128,21 @@ RUN	apk --no-cache --update add \
 	"amavisd foreground" \
 	"freshclam -d --quiet" \
 	"-q clamd" \
+	&& mkdir -p /etc/amavis && mv /etc/amavisd.conf /etc/amavis \
+	&& mkdir /run/amavis && chown amavis: /run/amavis \
+	&& conf replace /usr/sbin/amavisd /etc/amavisd.conf /etc/amavis/amavisd.conf \
+	&& conf imgcfg_cpfile dist /etc/amavis/amavisd.conf /etc/clamav/clamd.conf /etc/clamav/freshclam.conf \
 	&& addgroup clamav amavis && addgroup amavis clamav \
 	&& ln -sf /var/amavis/.spamassassin /root/.spamassassin \
 	&& mkdir -p /var/db/dkim && chown amavis: /var/db/dkim \
-	&& cp /etc/amavisd.conf /etc/amavisd.conf.dist \
-	&& conf addafter /etc/amavisd.conf '^$mydomain' '$inet_socket_bind = \x27127.0.0.1\x27; # limit to ipv4 loopback, no ipv6 support' \
-	&& conf addafter /etc/amavisd.conf '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \
-	&& conf uncommentsection /etc/amavisd.conf "# ### http://www.clamav.net/" \
-	&& conf replace /etc/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
-	&& conf modify /etc/amavisd.conf '\$pid_file' = '"$MYHOME/amavisd.pid";' \
+	&& conf addafter /etc/amavis/amavisd.conf '^$mydomain' '$inet_socket_bind = \x27127.0.0.1\x27; # limit to ipv4 loopback, no ipv6 support' \
+	&& conf addafter /etc/amavis/amavisd.conf '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \
+	&& conf addafter /etc/amavis/amavisd.conf '^$log_templ' '# $sa_debug = 0; # debug SpamAssassin' \
+	&& conf uncommentsection /etc/amavis/amavisd.conf "# ### http://www.clamav.net/" \
+	&& conf replace /etc/amavis/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
+	&& conf modify /etc/amavis/amavisd.conf '\$pid_file' = '"/run/amavis/amavisd.pid";' \
 	&& conf imgcfg_amavis_postfix \
-	&& mkdir /run/clamav && chown clamav:clamav /run/clamav \
-	&& cp /etc/clamav/clamd.conf /etc/clamav/clamd.conf.dist \
-	&& cp /etc/clamav/freshclam.conf /etc/clamav/freshclam.conf.dist \
+	&& mkdir /run/clamav && chown clamav: /run/clamav \
 	&& conf modify /etc/clamav/clamd.conf Foreground yes \
 	&& conf modify /etc/clamav/clamd.conf LogSyslog yes \
 	&& conf modify /etc/clamav/clamd.conf LogFacility LOG_MAIL \
@@ -149,11 +151,10 @@ RUN	apk --no-cache --update add \
 	&& conf modify /etc/clamav/freshclam.conf LogSyslog yes \
 	&& conf comment /etc/clamav/freshclam.conf UpdateLogFile \
 	&& conf modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL \
-	&& cp /etc/amavisd.conf /etc/amavisd.conf.build \
-	&& cp /etc/clamav/clamd.conf /etc/clamav/clamd.conf.build \
-	&& cp /etc/clamav/freshclam.conf /etc/clamav/freshclam.conf.build \
-	&& cp /etc/postfix/main.cf /etc/postfix/main.cf.build \
-	&& cp /etc/postfix/master.cf /etc/postfix/master.cf.build
+	&& conf imgcfg_cpfile bld /etc/amavis/amavisd.conf /etc/clamav/clamd.conf \
+		/etc/clamav/freshclam.conf /etc/postfix/main.cf /etc/postfix/master.cf \
+	&& conf imgdir_persist /etc/amavis /etc/mail /etc/clamav \
+		/var/amavis /var/db/dkim /var/lib/spamassassin /var/lib/clamav
 
 
 #

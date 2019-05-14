@@ -49,7 +49,7 @@ services:
       - DKIM_SELECTOR=${DKIM_SELECTOR-default}
       - SYSLOG_LEVEL=4
     volumes:
-      - mail-mta:/var
+      - mail-mta:/srv
 
   mail-db:
     image: mariadb

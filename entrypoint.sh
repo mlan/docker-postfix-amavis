@@ -19,10 +19,10 @@ postfix_ldap_groups_cf=${postfix_ldap_groups_cf-/etc/postfix/ldap-groups.cf}
 postfix_ldap_expand_cf=${postfix_ldap_expand_cf-/etc/postfix/ldap-groups-expand.cf}
 postfix_smtpd_tls_dir=${postfix_smtpd_tls_dir-/etc/postfix/ssl}
 postfix_home=${postfix_home-/var/spool/postfix}
-amavis_cf=${amavis_cf-/etc/amavisd.conf}
-dkim_dir=${dkim_dir-/var/db/dkim}
 amavis_runas=${amavis_runas-amavis}
 amavis_home=${amavis_home-/var/amavis}
+amavis_cf=${amavis_cf-/etc/amavis/amavisd.conf}
+dkim_dir=${dkim_dir-/var/db/dkim}
 dovecot_users=${dovecot_users-/etc/dovecot/virt-passwd}
 dovecot_cf=${dovecot_cf-/etc/dovecot/dovecot.conf}
 #dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
@@ -31,7 +31,7 @@ dovecot_cf=${dovecot_cf-/etc/dovecot/dovecot.conf}
 # define environment variables
 #
 
-amavis_var="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BAD_HEADER_DESTINY SA_TAG_LEVEL_DEFLT SA_TAG2_LEVEL_DEFLT LOG_LEVEL"
+amavis_var="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BAD_HEADER_DESTINY SA_TAG_LEVEL_DEFLT SA_TAG2_LEVEL_DEFLT SA_DEBUG LOG_LEVEL"
 
 #
 # Usage
@@ -48,18 +48,18 @@ COMMAND
 		We will keep eveyting that is after a '#' charater
 		Examples:
 		conf modify /etc/clamav/clamd.conf Foreground yes
-		conf modify /etc/amavisd.conf \$sa_tag_level_deflt = -999;
+		conf modify /etc/amavis/amavisd.conf \$sa_tag_level_deflt = -999;
 
 	replace <file> <old-string> <new-string>
 		match <old-string> and relpace it with <new-string>
 		Examples:
-		conf replace /etc/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock
+		conf replace /etc/amavis/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock
 
 	uncommentsection <file> <string>
 		Remove all leading '#' starting with a line that matches <string> and
 		ending with an empty line
 		Examples:
-		conf uncommentsection /etc/amavisd.conf '# ### http://www.clamav.net/'
+		conf uncommentsection /etc/amavis/amavisd.conf '# ### http://www.clamav.net/'
 
 	comment <file> <string>
 		Add leading '#' to line matching <string>
@@ -74,7 +74,7 @@ COMMAND
 	addafter <file> <match-string> <add-string>
 		Add <add-string> after line matching <match-string>
 		Examples:
-		conf addafter /etc/amavisd.conf '@local_domains_maps' '$inet_socket_bind = '\''127.0.0.1'\'';'
+		conf addafter /etc/amavis/amavisd.conf '@local_domains_maps' '$inet_socket_bind = '\''127.0.0.1'\'';'
 
 	uniquelines  <file>
 		remove the last line of imediately following duplcate lines
@@ -215,7 +215,7 @@ imgcfg_dovecot_passwdfile() {
 		    }
 		}
 	!cat
-	[ -e ${1-$dovecot_cf} ] && cp $dovecot_cf $dovecot_cf.build
+	[ -e ${1-$dovecot_cf} ] && cp $dovecot_cf $dovecot_cf.bld
 }
 
 imgcfg_amavis_postfix() {
@@ -252,15 +252,34 @@ imgcfg_amavis_postfix() {
 }
 
 imgdir_persist() {
-	mkdir -p $docker_build_persist_dir/etc
-	mkdir -p $docker_build_persist_dir/var
-	for dir in postfix amavis dovecot clamav mail; do
-		mkdir -p $docker_build_persist_dir/etc/$dir
-		ln -s $docker_build_persist_dir/etc/$dir /etc/$dir
-	done
-	for dir in /spool/postfix amavis dovecot clamav mail; do
-		mkdir -p $docker_build_persist_dir/var/$dir
-		ln -s $docker_build_persist_dir/var/$dir /var/$dir
+	# mv dir to persist location and leave a link to it
+	local srcdirs="$@"
+	if [ -n "$docker_build_persist_dir" ]; then
+		for srcdir in $srcdirs; do
+			if [ -e "$srcdir" ]; then
+				local dstdir="${docker_build_persist_dir}${srcdir}"
+				local dsthome="$(dirname $dstdir)"
+				if [ ! -d "$dstdir" ]; then
+					scr_info 0 "Moving $srcdir to $dstdir"
+					mkdir -p "$dsthome"
+					mv "$srcdir" "$dsthome"
+					ln -sf "$dstdir" "$srcdir"
+				else
+					scr_info 1 "$srcdir already moved to $dstdir"
+				fi
+			else
+				scr_info 1 "Cannot find $srcdir"
+			fi
+		done
+	fi
+}
+
+imgcfg_cpfile() {
+	local suffix=$1
+	shift
+	local cfs=$@
+	for cf in $cfs; do
+		cp "$cf" "$cf.$suffix"
 	done
 }
 
@@ -269,7 +288,7 @@ imgdir_persist() {
 #
 
 _need_config() { [ ! -f "$docker_config_lock" ] || [ -n "$FORCE_CONFIG" ] ;}
-	# false if lock file and FORCE_CONFIG empty
+	# true if there is no lock file or FORCE_CONFIG is not empty
 
 _is_installed() { apk -e info $1 &>/dev/null ;} # true if apk is installed
 
@@ -601,8 +620,8 @@ cntdir_chown_home() {
 }
 
 cntdir_prune_pidfiles() {
-	for dir in /run /var/spool/postfix/pid /var/amavis; do
-		if [ -n "$(find $dir -type f -name "*.pid" -exec rm {} \;)" ]; then
+	for dir in /run /var/spool/postfix/pid; do
+		if [ -n "$(find -H $dir -type f -name "*.pid" -exec rm {} \; 2>/dev/null)" ]; then
 			scr_info 0 "Removed orphan pid files in $dir"
 		fi
 	done
@@ -671,7 +690,6 @@ scr_cli_and_exit "$@"
 #cntdir_chown_home
 cntdir_prune_pidfiles
 cntcfg_all
-
 update_loglevel
 
 #
