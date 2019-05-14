@@ -11,8 +11,8 @@ before_script:
   - sudo apt-get install -y ldap-utils openssl
 
 script:
-#  - make test_1
-#  - make test_2
+  - make test_1
+  - make test_2
   - make test_3
   - make test_4
   - make test_5
