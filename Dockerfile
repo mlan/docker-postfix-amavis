@@ -50,7 +50,7 @@ RUN	apk --update add \
 	&& postconf -e mynetworks_style=subnet \
 	&& rm -rf /var/cache/apk/* \
 	&& conf imgcfg_cpfile bld /etc/postfix/main.cf /etc/postfix/master.cf \
-	&& conf imgdir_persist /etc/postfix /var/spool/postfix /var/mail
+	&& conf imgdir_persist /etc/postfix /etc/ssl /var/spool/postfix /var/mail
 
 #
 # state standard smtp port
@@ -83,10 +83,12 @@ FROM	mta AS mda
 
 #
 # Install
+# remove private key that dovecot creates
 #
 
 RUN	apk --no-cache --update add dovecot \
 	&& setup-runit.sh "dovecot -F" \
+	&& rm -f /etc/ssl/dovecot/* \
 	&& addgroup postfix dovecot && addgroup dovecot postfix \
 	&& conf imgcfg_dovecot_passwdfile \
 	&& conf imgdir_persist /etc/dovecot

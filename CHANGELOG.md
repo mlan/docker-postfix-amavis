@@ -1,3 +1,6 @@
+# 1.2.1
+- Fixed new bug where the ACME TLS hook was not run in persistent setups
+
 # 1.2.0
 - Supports SMTP client SASL authentication using Dovecot
 - Support multiple domains

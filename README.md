@@ -1,7 +1,7 @@
 # The `mlan/postfix-amavis` repository
 
-![Travis (.org)](https://img.shields.io/travis/mlan/docker-postfix-amavis.svg?label=build&style=popout-square&logo=travis)
-![MicroBadger Size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
+![travis-ci test](https://img.shields.io/travis/mlan/docker-postfix-amavis.svg?label=build&style=popout-square&logo=travis)
+![image size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
 ![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=popout-square&logo=docker)
 ![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=popout-square&logo=docker)
 
@@ -9,7 +9,7 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 
 ## Features
 
-Brief feature list follows below
+Feature list follows below
 
 - MTA (SMTP) server and client [Postfix](http://www.postfix.org/)
 - Anti-spam filter [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/)
@@ -251,7 +251,7 @@ docker exec -it mail-mta conf update_postfix_dhparam
 
 ### Let’s Encrypt LTS certificates using Traefik
 
-Let’s Encrypt provide free, automated, authorized certificates when you can demonstrate control over your domain. Automatic Certificate Management Environment (ACME) is the protocol used for such demonstration. There are many agents and applications that supports ACME, e.g., [certbot](https://certbot.eff.org/). The reverse proxy [Traefik](https://docs.traefik.io/) also supports ACME. 
+Let’s Encrypt provide free, automated, authorized certificates when you can demonstrate control over your domain. Automatic Certificate Management Environment (ACME) is the protocol used for such demonstration. There are many agents and applications that supports ACME, e.g., [certbot](https://certbot.eff.org/). The reverse proxy [Traefik](https://docs.traefik.io/) also supports ACME.
 
 #### `ACME_FILE`
 

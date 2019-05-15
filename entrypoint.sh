@@ -17,7 +17,7 @@ postfix_ldap_users_cf=${postfix_ldap_users_cf-/etc/postfix/ldap-users.cf}
 postfix_ldap_alias_cf=${postfix_ldap_alias_cf-/etc/postfix/ldap-aliases.cf}
 postfix_ldap_groups_cf=${postfix_ldap_groups_cf-/etc/postfix/ldap-groups.cf}
 postfix_ldap_expand_cf=${postfix_ldap_expand_cf-/etc/postfix/ldap-groups-expand.cf}
-postfix_smtpd_tls_dir=${postfix_smtpd_tls_dir-/etc/postfix/ssl}
+postfix_smtpd_tls_dir=${postfix_smtpd_tls_dir-/etc/ssl/postfix}
 postfix_home=${postfix_home-/var/spool/postfix}
 amavis_runas=${amavis_runas-amavis}
 amavis_home=${amavis_home-/var/amavis}
@@ -26,6 +26,7 @@ dkim_dir=${dkim_dir-/var/db/dkim}
 dovecot_users=${dovecot_users-/etc/dovecot/virt-passwd}
 dovecot_cf=${dovecot_cf-/etc/dovecot/dovecot.conf}
 #dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
+ACME_TLS_DIR=${ACME_TLS_DIR-/etc/ssl/acme}
 
 #
 # define environment variables
@@ -85,7 +86,7 @@ FILE
 "
 }
 
-scr_formats() {
+cntrun_formats() {
 	name=$(basename $0)
 	f_norm="\e[0m"
 	f_bold="\e[1m"
@@ -300,9 +301,8 @@ lock_config() {
 	fi
 }
 
-cntcfg_all() {
+cntrun_cfgall() {
 	if _need_config; then
-		cntcfg_acme_postfix_tls_cert
 		cntcfg_amavis_domains
 		cntcfg_amavis_dkim
 		cntcfg_amavis_apply_envvars
@@ -520,14 +520,13 @@ cntcfg_postfix_mailbox_auth_file() {
 	fi
 }
 
-cntcfg_acme_postfix_tls_cert() {
+cntrun_acme_postfix_tls_cert() {
 	# we are potentially updating $SMTPD_TLS_CERT_FILE and $SMTPD_TLS_KEY_FILE
 	# here so we need to run this func before cntcfg_postfix_tls_cert and cntcfg_postfix_apply_envvars
 	ACME_FILE=${ACME_FILE-/acme/acme.json}
 	if (_is_installed inotify-tools && [ -f $ACME_FILE ]); then
 		scr_info 0 "Configuring acme-tls"
 		HOSTNAME=${HOSTNAME-$(hostname)}
-		ACME_TLS_DIR=${ACME_TLS_DIR-/tmp/ssl}
 		ACME_TLS_CERT_FILE=$ACME_TLS_DIR/certs/${HOSTNAME}.crt
 		ACME_TLS_KEY_FILE=$ACME_TLS_DIR/private/${HOSTNAME}.key
 		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$ACME_TLS_CERT_FILE}
@@ -561,18 +560,6 @@ cntcfg_postfix_tls_cert() {
 	fi
 }
 
-_amavis_envvar() {
-	# allow amavis parameters to be modified using environment variables
-	local env_var="$1"
-	local lcase_var="$2"
-	local env_val
-	if [ -z "${amavis_var##*$env_var*}" ]; then
-		env_val="$(eval echo \$$env_var)"
-		scr_info 0 "Setting amavis parameter $lcase_var = $env_val"
-		modify $amavis_cf '\$'$lcase_var = "$env_val;"
-	fi
-}
-
 cntcfg_postfix_apply_envvars() {
 	# some postfix parameters start with a digit and may contain dash "-"
 	# and so are not legal variable names
@@ -585,7 +572,6 @@ cntcfg_postfix_apply_envvars() {
 			scr_info 0 "Setting postfix parameter $lcase_var = $env_val"
 			postconf $lcase_var="$env_val"
 		fi
-#		_amavis_envvar $env_var $lcase_var
 	done
 }
 
@@ -613,13 +599,13 @@ cntcfg_spamassassin_update() {
 	fi
 }
 
-cntdir_chown_home() {
+cntrun_chown_home() {
 	_chowncond $postfix_runas $postfix_home
 	_chowncond $postfix_runas $mail_dir
 	_chowncond $amavis_runas  $amavis_home
 }
 
-cntdir_prune_pidfiles() {
+cntrun_prune_pidfiles() {
 	for dir in /run /var/spool/postfix/pid; do
 		if [ -n "$(find -H $dir -type f -name "*.pid" -exec rm {} \; 2>/dev/null)" ]; then
 			scr_info 0 "Removed orphan pid files in $dir"
@@ -664,7 +650,7 @@ update_postfix_dhparam() {
 # allow functions to be accessed on cli
 #
 
-scr_cli_and_exit() {
+cntrun_cli_and_exit() {
 	if [ "$(basename $0)" = conf ]; then
 		calledformcli=true
 		local cmd=$1
@@ -684,12 +670,13 @@ scr_cli_and_exit() {
 # run config
 #
 
-scr_formats
-scr_cli_and_exit "$@"
+cntrun_formats
+cntrun_cli_and_exit "$@"
 
-#cntdir_chown_home
-cntdir_prune_pidfiles
-cntcfg_all
+#cntrun_chown_home
+cntrun_prune_pidfiles
+cntrun_acme_postfix_tls_cert
+cntrun_cfgall
 update_loglevel
 
 #
