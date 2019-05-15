@@ -46,6 +46,7 @@ RUN	apk --update add \
 	"crond -f -c /etc/crontabs" \
 	"postfix start-fg" \
 	&& mkdir -p /var/mail && chown postfix: /var/mail \
+	&& mkdir -p /etc/ssl/postfix \
 	&& conf imgcfg_cpfile dist /etc/postfix/main.cf /etc/postfix/master.cf \
 	&& postconf -e mynetworks_style=subnet \
 	&& rm -rf /var/cache/apk/* \

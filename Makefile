@@ -29,8 +29,8 @@ TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) -e TZ=$(TST_TZ) \
 TST_MSG  ?= ---test-message---
 TST_KEY  ?= local_priv_key.pem
 TST_CRT  ?= local_ca_cert.pem
-TST_PKEY ?= /etc/postfix/priv.pem
-TST_PCRT ?= /etc/postfix/cert.pem
+TST_PKEY ?= /etc/ssl/postfix/priv.pem
+TST_PCRT ?= /etc/ssl/postfix/cert.pem
 TST_USR1 ?= client1
 TST_PWD1 ?= password1
 TST_USR2 ?= client2
