@@ -50,7 +50,7 @@ auth-show_user:
 
 auth-add_user:
 	printf "dn: ou=$(LDAP_USEROU),$(LDAP_BASE)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_USEROU)\n\ndn: ou=$(LDAP_GROUPOU),$(LDAP_BASE)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_GROUPOU)\n\ndn: uid=$(LDAP_TEST_USER),ou=$(LDAP_USEROU),$(LDAP_BASE)\nchangetype: add\nobjectClass: top\nobjectClass: inetOrgPerson\nobjectClass: $(LDAP_USEROBJ)\ncn: $(LDAP_TEST_USER)\nsn: $(LDAP_TEST_USER)\nuid: $(LDAP_TEST_USER)\nmail: $(LDAP_TEST_USER)@$(MAIL_DOMAIN)\nuidNumber: 1234\ngidNumber: 1234\nhomeDirectory: /home/$(LDAP_TEST_USER)\nuserPassword: $(LDAP_TEST_PASSWD)\n" \
-	| tee /dev/tty | docker-compose exec -T auth ldap modify
+	| docker-compose exec -T auth ldap modify
 
 mail-mta-up:
 	docker-compose up -d mail-mta
@@ -65,11 +65,14 @@ mail-mta-logs:
 	docker container logs $(COMPOSE_PROJECT_NAME)_mail-mta_1
 
 mail-mta-bayes:
-	docker-compose exec mail-mta sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis && rm -rf bayesian.database'
+	docker-compose exec mail-mta sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis/.spamassassin && rm -rf bayesian.database'
 
 mail-mta-test:
-	printf "EHLO mx\nMAIL FROM: <test@$(MAIL_DOMAIN).com>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@$(MAIL_DOMAIN)>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A test message\n\nGreat news! You can receive email.\n.\nQUIT\n" \
+	printf "EHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A test message\n\nGreat news! You can receive email.\n.\nQUIT\n" \
 	| nc -C localhost 25
+
+mail-mta-razor:
+	docker-compose exec mail-mta conf cntcfg_razor_register
 
 mail-db-up:
 	docker-compose up -d mail-db

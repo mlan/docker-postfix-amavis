@@ -137,6 +137,8 @@ RUN	apk --no-cache --update add \
 	&& conf imgcfg_cpfile dist /etc/amavis/amavisd.conf /etc/clamav/clamd.conf /etc/clamav/freshclam.conf \
 	&& addgroup clamav amavis && addgroup amavis clamav \
 	&& ln -sf /var/amavis/.spamassassin /root/.spamassassin \
+	&& mkdir -p /var/amavis/.razor && chown amavis: /var/amavis/.razor \
+	&& ln -sf /var/amavis/.razor /root/.razor \
 	&& mkdir -p /var/db/dkim && chown amavis: /var/db/dkim \
 	&& conf addafter /etc/amavis/amavisd.conf '^$mydomain' '$inet_socket_bind = \x27127.0.0.1\x27; # limit to ipv4 loopback, no ipv6 support' \
 	&& conf addafter /etc/amavis/amavisd.conf '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \

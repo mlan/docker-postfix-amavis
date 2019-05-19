@@ -12,12 +12,12 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 Feature list follows below
 
 - MTA (SMTP) server and client [Postfix](http://www.postfix.org/)
-- Anti-spam filter [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/)
+- Anti-spam filter [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/) 
 - Anti-virus [ClamAV](https://www.clamav.net/)
 - Sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail)
 - SMTP client authentication on the submission port 587 using [Dovecot](https://www.dovecot.org/)
 - Hooks for integrating [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using the reverse proxy [Traefik](https://docs.traefik.io/)
-- Consolidated configuration and run data under `/srv` to facilitate persistent storage
+- Consolidated configuration and run data under `/srv` to facilitate persistent storage
 - Simplified configuration of mailbox table lookup using environment variables
 - Simplified configuration of [LDAP](https://en.wikipedia.org/wiki/Lightweight_Directory_Access_Protocol) mailbox and alias lookup using environment variables
 - Simplified configuration of [SMTP](https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol) relay using environment variables
@@ -27,7 +27,7 @@ Feature list follows below
 - Multi-staged build providing the images `full`, `milter`, `mda` and `mta`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
-- Built in utility script `conf` helping configuring Postfix, AMaViS, SpamAssassin, ClamAV and Dovecot
+- Built in utility script `conf` helping configuring Postfix, AMaViS, SpamAssassin, Razor, ClamAV and Dovecot
 - Makefile which can build images and do some management and testing
 - Health check
 - Small image size based on [Alpine Linux](https://alpinelinux.org/)
@@ -161,7 +161,7 @@ make test
 
 ## Environment variables
 
-When you create the `mlan/postfix-amavis` container, you can configure the services by passing one or more environment variables or arguments on the docker run command line. Once the services has been configured a lock file is created, to avoid repeating the configuration procedure when the container is restated. In the rare event that want to modify the configuration of an existing container you can override the default behavior by setting `FORCE_CONFIG` to a no-empty string.
+When you create the `mlan/postfix-amavis` container, you can configure the services by passing one or more environment variables or arguments on the docker run command line. Once the services has been configured a lock file is created, to avoid repeating the configuration procedure when the container is restated. In the rare event that want to modify the configuration of an existing container you can override the default behavior by setting `FORCE_CONFIG` to a no-empty string.
 
 To see all available postfix configuration variables you can run `postconf` within the container, for example like this:
 
@@ -267,7 +267,11 @@ Do not set `SMTPD_TLS_CERT_FILE` and/or `SMTPD_TLS_KEY_FILE` when using `ACME_FI
 
 ## Incoming anti-spam and anti-virus
 
-Amavisd-new is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or SpamAssassin. Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS blocklists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
+[amavisd-new](https://www.amavis.org/) is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or [SpamAssassin](https://spamassassin.apache.org/). Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS blocklists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
+
+[Vipul's Razor](http://razor.sourceforge.net/) is a distributed, collaborative, spam detection and filtering network. It uses a fuzzy [checksum](http://en.wikipedia.org/wiki/Checksum) technique to identify
+message bodies based on signatures submitted by users, or inferred by 
+other techniques such as high-confidence Bayesian or DNSBL entries. 
 
 AMaViS will only insert mail headers in incoming messages with domain mentioned in `MAIL_DOMAIN`. So proper configuration is needed for anti-spam and anti-virus to work.
 
@@ -279,6 +283,17 @@ When an undesirable email is found, the action according to the `FINAL_*_DESTINY
 `D_PASS`: Mail will pass to recipients, regardless of bad  contents. `D_BOUNCE`: Mail will not be delivered to its recipients, instead, a non-delivery notification (bounce) will be created and sent to the sender. `D_REJECT`: Mail will not be delivered to its  recipients, instead, a reject response will be sent to the upstream MTA and that MTA may create a reject notice (bounce) and return  it to the sender. `D_DISCARD`: Mail will not be delivered to its recipients and the sender normally will NOT be notified.
 
 Default settings are: `FINAL_VIRUS_DESTINY=D_DISCARD`, `FINAL_BANNED_DESTINY=D_DISCARD`, `FINAL_SPAM_DESTINY=D_PASS`, `FINAL_BAD_HEADER_DESTINY=D_PASS`.
+
+#### `SA_TAG_LEVEL_DEFLT`, `SA_TAG2_LEVEL_DEFLT`, `SA_KILL_LEVEL_DEFLT`
+
+`SA_TAG_LEVEL_DEFLT=2.0` controls at which level (or above) spam info headers are added to mail. `SA_TAG2_LEVEL_DEFLT=6.2` controls at which level the 'spam detected' headers are added. `SA_KILL_LEVEL_DEFLT=6.9` set the trigger level when spam evasive actions are taken (e.g. blocking mail).
+
+#### `RAZOR_REGISTRATION`
+
+Razor, called by SpamAssassin,  will check if the signature of the received email is registered in the Razor servers and adjust the spam score accordingly. Razor can also report detected spam to its servers, but then it needs to use a registered identity.
+
+To register an identity with the Razor server, use `RAZOR_REGISTRATION`. You can request to be know as a certain user name, `RAZOR_REGISTRATION=username:passwd`. If you omit both user name and password, e.g., `RAZOR_REGISTRATION=:`, they will both be assigned to you by the Razor server. Likewise if password is omitted a password will be assigned by the Razor server. Razor users are encouraged
+to use their email addresses as their user name. Example: `RAZOR_REGISTRATION=postmaster@example.com:secret` 
 
 ## Incoming SPF sender authentication
 
@@ -307,11 +322,11 @@ The private key is stored here  `/var/db/dkim/MAIL_DOMAIN.DKIM_SELECTOR.privkey.
 docker cp $MAIL_DOMAIN.$DKIM_SELECTOR.privkey.pem <container_name>:var/db/dkim
 ```
 
- If you wish to create a new private key you can run:
+If you wish to create a new private key you can run:
 
-``````bash
+```bash
 docker exec -it <container_name> amavisd genrsa /var/db/dkim/$MAIL_DOMAIN.$DKIM_SELECTOR.privkey.pem $DKIM_KEYBITS
-``````
+```
 
 ## Table mailbox lookup
 
@@ -376,9 +391,13 @@ Sometimes want to authenticate SMTP client connecting to the submission port 578
 
 `SMTPD_SASL_CLIENTAUTH="client1:{plain}password1 client2:{plain}password2"`
 
-## Logging `SYSLOG_LEVEL`
+## Logging `SYSLOG_LEVEL`, `LOG_LEVEL`, `SA_DEBUG`
 
-The level of output for logging is in the range from 0 to 8. 0 means emergency logging only, 1 for alert messages, 2 for critical messages only, 3 for error or worse, 4 for warning or worse, 5 for notice or worse, 6 for info or worse, 7 debug. Default: `SYSLOG_LEVEL=4`
+The level of output for logging is in the range from 0 to 8. 1 means emergency logging only, 2 for alert messages, 3 for critical messages only, 4 for error or worse, 5 for warning or worse, 6 for notice or worse, 7 for info or worse, 8 debug. Default: `SYSLOG_LEVEL=4`
+
+Separately, `LOG_LEVEL` and `SA_DEBUG` control the loging level of amavisd-new and spamassasin respectively.
+`LOG_LEVEL` takes valued from 0 to 5 and `SA_DEBUG` is etier 1 (activeated) or 0 (deactivated). Note that these messages will only appear in the log if `SYSLOG_LEVEL` is 7 or greater.
+
 
 ## DNS records
 

@@ -47,7 +47,11 @@ services:
       - LDAP_USER_BASE=ou=${LDAP_USEROU-users},${LDAP_BASE-dc=example,dc=com}
       - LDAP_QUERY_FILTER_USER=(&(objectclass=${LDAP_USEROBJ-posixAccount})(mail=%s))
       - DKIM_SELECTOR=${DKIM_SELECTOR-default}
-      - SYSLOG_LEVEL=4
+      - SA_TAG_LEVEL_DEFLT=${SA_TAG_LEVEL_DEFLT-2.0}
+      - SA_DEBUG=${SA_DEBUG-0}
+      - SYSLOG_LEVEL=${SYSLOG_LEVEL-}
+      - LOG_LEVEL=${LOG_LEVEL-0}
+      - RAZOR_REGISTRATION=${RAZOR_REGISTRATION-}
     volumes:
       - mail-mta:/srv
 

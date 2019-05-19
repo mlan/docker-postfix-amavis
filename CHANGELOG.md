@@ -1,3 +1,7 @@
+# 1.2.2
+- Simplify registering with razor so that spam signatures can be checked and shared
+- Fixed razor installation
+
 # 1.2.1
 - Fixed new bug where the ACME TLS hook was not run in persistent setups
 

@@ -25,6 +25,10 @@ amavis_cf=${amavis_cf-/etc/amavis/amavisd.conf}
 dkim_dir=${dkim_dir-/var/db/dkim}
 dovecot_users=${dovecot_users-/etc/dovecot/virt-passwd}
 dovecot_cf=${dovecot_cf-/etc/dovecot/dovecot.conf}
+razor_url=${razor_url-discovery.razor.cloudmark.com}
+razor_home=${razor_home-/var/amavis/.razor}
+razor_identity=${razor_identity-$razor_home/identity}
+razor_runas=${razor_runas-amavis}
 #dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
 ACME_TLS_DIR=${ACME_TLS_DIR-/etc/ssl/acme}
 
@@ -32,7 +36,7 @@ ACME_TLS_DIR=${ACME_TLS_DIR-/etc/ssl/acme}
 # define environment variables
 #
 
-amavis_var="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BAD_HEADER_DESTINY SA_TAG_LEVEL_DEFLT SA_TAG2_LEVEL_DEFLT SA_DEBUG LOG_LEVEL"
+amavis_var="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BAD_HEADER_DESTINY SA_TAG_LEVEL_DEFLT SA_TAG2_LEVEL_DEFLT SA_KILL_LEVEL_DEFLT SA_DEBUG LOG_LEVEL"
 
 #
 # Usage
@@ -247,7 +251,8 @@ imgcfg_amavis_postfix() {
 	postconf -P "localhost:10025/inet/smtpd_hard_error_limit=1000"
 	postconf -P "localhost:10025/inet/smtpd_client_connection_count_limit=0"
 	postconf -P "localhost:10025/inet/smtpd_client_connection_rate_limit=0"
-	postconf -P "localhost:10025/inet/receive_override_options=no_header_body_checks,no_unknown_recipient_checks"
+	postconf -P "localhost:10025/inet/local_header_rewrite_clients="
+	postconf -P "localhost:10025/inet/receive_override_options=no_header_body_checks,no_unknown_recipient_checks,no_milters"
 	postconf -P "pickup/unix/content_filter="
 	postconf -P "pickup/unix/receive_override_options=no_header_body_checks"
 }
@@ -314,6 +319,7 @@ cntrun_cfgall() {
 		cntcfg_postfix_tls_cert
 		cntcfg_postfix_apply_envvars
 		cntcfg_spamassassin_update
+		cntcfg_razor_register
 		lock_config
 	else
 		scr_info 0 "Found config lock file, so not touching configuration"
@@ -344,6 +350,7 @@ cntcfg_postfix_smtp_auth_pwfile() {
 }
 
 cntcfg_dovecot_smtpd_auth_pwfile() {
+	# NOTE: entries are appended so does work well with FORCE_CONFIG
 	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	# dovecot need to be installed
 	if (_is_installed dovecot && [ -n "$clientauth" ]); then
@@ -366,6 +373,7 @@ cntcfg_dovecot_smtpd_auth_pwfile() {
 }
 
 cntcfg_postfix_domains() {
+	# NOTE: entries are appended so does work well with FORCE_CONFIG
 	# configure domains if we have recipients
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	if [ -n "$domains" ] && ([ -n "$LDAP_HOST" ] || [ -n "$MAIL_BOXES" ]); then
@@ -599,7 +607,35 @@ cntcfg_spamassassin_update() {
 	fi
 }
 
+cntcfg_razor_register() {
+	local auth="${1-$RAZOR_REGISTRATION}"
+	auth=${auth//:/ }
+	set -- $auth
+	local user=$1
+	local pass=$2
+	# create a razor conf file and discover razor servers
+	if _is_installed razor; then
+		scr_info 0 "Discovering razor servers"
+		razor-admin -home=$razor_home -create
+		if ([ -n "$auth" ] && [ ! -e $razor_identity ]); then
+			# register an identity if RAZOR_REGISTRATION is notempty
+			[ -n "$user" ] && user="-user=$user"
+			[ -n "$pass" ] && pass="-pass=$pass"
+			if ping -c1 $razor_url >/dev/null 2>&1; then
+				local message="$(razor-admin -home=$razor_home $user $pass -register)"
+				scr_info 0 "$message"
+			else
+				scr_info 1 "Not registering razor, cannot ping $razor_url"
+			fi
+#		else
+#			scr_info 1 "razor already registered"
+		fi
+		_chowncond $razor_runas $razor_home
+	fi
+}
+
 cntrun_chown_home() {
+	# do we need to check  /var/amavis/.spamassassin/bayes_journal ?
 	_chowncond $postfix_runas $postfix_home
 	_chowncond $postfix_runas $mail_dir
 	_chowncond $amavis_runas  $amavis_home
@@ -622,6 +658,7 @@ doveadm_pw() { doveadm pw -p $1 ;}
 update_loglevel() {
 	local loglevel=${1-$SYSLOG_LEVEL}
 	if [ -n "$loglevel" ]; then
+		scr_info 0 "Setting syslogd level to $loglevel"
 		setup-runit.sh "syslogd -n -O /dev/stdout -l $loglevel"
 	fi
 	if [ "$calledformcli" = true ]; then
