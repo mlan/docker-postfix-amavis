@@ -174,6 +174,12 @@ RUN	apk --no-cache --update add \
 FROM	milter AS full
 
 #
+# Copy utility scripts to image
+#
+
+COPY dumpcerts.sh /usr/local/bin/.
+
+#
 # Install
 #
 
@@ -183,10 +189,6 @@ RUN	apk --no-cache --update add \
 	openssl \
 	util-linux \
 	bash \
-	tzdata
-
-#
-# Copy utility scripts to image
-#
-
-COPY dumpcerts.sh /usr/local/bin/.
+	tzdata \
+	&& mkdir -p /etc/ssl/acme \
+	&& conf imgcfg_acme_dump_cronjob

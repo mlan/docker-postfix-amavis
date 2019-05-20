@@ -23,12 +23,17 @@ TST_VCLT ?= $(TST_CLT)-var:/var
 TST_VSRV ?= $(TST_SRV)-var:/var
 TST_SLOG ?= 4
 TST_ALOG ?= 5
+TST_SBUG ?= 0
+TST_STAG ?= -99
 TST_TZ   ?= UTC
 TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) -e TZ=$(TST_TZ) \
-		-e SA_TAG_LEVEL_DEFLT=-999 -e SA_DEBUG=1 -e LOG_LEVEL=$(TST_ALOG)
+		-e SA_TAG_LEVEL_DEFLT=$(TST_STAG) -e SA_DEBUG=$(TST_SBUG) -e LOG_LEVEL=$(TST_ALOG)
 TST_MSG  ?= ---test-message---
 TST_KEY  ?= local_priv_key.pem
 TST_CRT  ?= local_ca_cert.pem
+TST_ACME ?= local_acme.json
+TST_ATLS ?= -e ACME_FILE=/acme.json -v $(shell pwd)/$(TST_ACME):/acme.json:ro
+TST_CRTD ?= 30
 TST_PKEY ?= /etc/ssl/postfix/priv.pem
 TST_PCRT ?= /etc/ssl/postfix/cert.pem
 TST_USR1 ?= client1
@@ -179,14 +184,14 @@ test-up_5: test-up-net
 		-e MYDESTINATION= -e LOG_LEVEL=$(TST_ALOG) \
 		$(IMG_REPO):$(IMG_VER)-milter
 
-test-up_6: test-up-net
+test-up_6: test-up-net test-cert-gen
 	#
 	# test (6) dkim and multiple domains
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX2)" -e MAIL_DOMAIN="$(TST_DOM) $(TST_DOM2)" \
-		-v $(TST_SRV)-srv:/srv \
+		-v $(TST_SRV)-srv:/srv $(TST_ATLS) \
 		$(IMG_REPO):$(IMG_VER)-full
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
@@ -274,14 +279,17 @@ test-mail-read_%:
 	docker exec -it $(TST_SRV) cat /var/mail/$(TST_RADR)@$(tst_dom) | grep $(tst_str)
 
 $(TST_CRT): $(TST_KEY)
-	openssl req -x509 -utf8 -new -batch \
+	openssl req -x509 -utf8 -new -batch -days $(TST_CRTD) \
 		-subj "/CN=$(TST_SRV)" -key $(TST_KEY) -out $(TST_CRT)
 
 $(TST_KEY):
 	openssl genrsa -out $(TST_KEY)
 
+$(TST_ACME): $(TST_CRT)
+	test/gen-acme-json.sh $(TST_RADR)@$(TST_DOM) srv.$(TST_DOM) $(TST_KEY) $(TST_CRT) > $(TST_ACME)
+
 test-cert-rm:
-	rm $(TST_KEY) $(TST_CRT)
+	rm $(TST_KEY) $(TST_CRT) $(TST_ACME)
 
 test-logs-clt:
 	docker container logs $(TST_CLT)
@@ -307,17 +315,33 @@ test-regen-edh-srv:
 test-dkim-key:
 	docker exec -it $(TST_SRV) amavisd testkeys
 
-test-cert-gen: $(TST_CRT)
+test-cert-gen: $(TST_ACME)
 
 test-debugtools-srv:
 	docker exec -it $(TST_SRV) apk --no-cache --update add \
 	nano less lsof htop openldap-clients bind-tools iputils
 
 test-learn-bayes:
-	docker exec -it $(TST_SRV) sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis:amavis /var/amavis && rm -rf bayesian.database'
+	docker exec -it $(TST_SRV) sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis && rm -rf bayesian.database'
+
+seed:
+	mkdir -p seed
+
+test-export-bayes: seed
+	docker exec -i $(TST_SRV) sa-learn --backup > seed/bayesian.database.bak
+
+test-import-bayes: seed/bayesian.database.bak
+	docker cp seed/bayesian.database.bak $(TST_SRV):/tmp/.
+	docker exec -it $(TST_SRV) sh -c 'sa-learn --restore /tmp/bayesian.database.bak && chown -R amavis: /var/amavis/.spamassassin && rm -rf /tmp/bayesian.database.bak'
 
 test-learn-spam:
 	docker exec -it $(TST_SRV) sa-learn.sh a
+
+test-status-bayes:
+	docker exec -it $(TST_SRV) sa-learn --dump magic \
+	| sed -r 's/[^ ]+\s+[^ ]+\s+([^ ]+).*non-token data: (.*)/\1\@\2/g' \
+	| sed -r '/atime/s/(.*)@(.*)/echo $$(date --date=@\1 +%Y%b%d-%T)@\2/eg' \
+	| column -t -s @
 
 test-timezone-srv:
 	docker cp /usr/share/zoneinfo/$(TST_TZ) $(TST_SRV):/etc/localtime

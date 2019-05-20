@@ -4,8 +4,8 @@
 # config
 #
 
-docker_build_runit_dir=${docker_build_runit_dir-/etc/service}
-docker_build_persist_dir=${docker_build_persist_dir-/srv}
+docker_runit_dir=${docker_runit_dir-/etc/service}
+docker_persist_dir=${docker_persist_dir-/srv}
 docker_config_lock=${docker_config_lock-/etc/postfix/docker-config-lock}
 postfix_sasl_passwd=${postfix_sasl_passwd-/etc/postfix/sasl-passwords}
 postfix_virt_mailbox=${postfix_virt_mailbox-/etc/postfix/virt-users}
@@ -30,7 +30,11 @@ razor_home=${razor_home-/var/amavis/.razor}
 razor_identity=${razor_identity-$razor_home/identity}
 razor_runas=${razor_runas-amavis}
 #dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
-ACME_TLS_DIR=${ACME_TLS_DIR-/etc/ssl/acme}
+acme_dump_tls_dir=${acme_dump_tls_dir-/etc/ssl/acme}
+acme_dump_cron_job=${acme_dump_cron_job-/etc/periodic/15min/acme-update}
+acme_dump_cron_lock=${acme_dump_cron_lock-/run/acme-update.lock}
+acme_dump_json_link=${acme_dump_json_link-$acme_dump_tls_dir/acme.json}
+ACME_FILE=${ACME_FILE-/acme/acme.json}
 
 #
 # define environment variables
@@ -260,10 +264,10 @@ imgcfg_amavis_postfix() {
 imgdir_persist() {
 	# mv dir to persist location and leave a link to it
 	local srcdirs="$@"
-	if [ -n "$docker_build_persist_dir" ]; then
+	if [ -n "$docker_persist_dir" ]; then
 		for srcdir in $srcdirs; do
 			if [ -e "$srcdir" ]; then
-				local dstdir="${docker_build_persist_dir}${srcdir}"
+				local dstdir="${docker_persist_dir}${srcdir}"
 				local dsthome="$(dirname $dstdir)"
 				if [ ! -d "$dstdir" ]; then
 					scr_info 0 "Moving $srcdir to $dstdir"
@@ -308,6 +312,7 @@ lock_config() {
 
 cntrun_cfgall() {
 	if _need_config; then
+		cntcnf_acme_postfix_tls_cert
 		cntcfg_amavis_domains
 		cntcfg_amavis_dkim
 		cntcfg_amavis_apply_envvars
@@ -350,7 +355,7 @@ cntcfg_postfix_smtp_auth_pwfile() {
 }
 
 cntcfg_dovecot_smtpd_auth_pwfile() {
-	# NOTE: entries are appended so does work well with FORCE_CONFIG
+	# NOTE: entries are appended so does NOT work well with FORCE_CONFIG
 	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	# dovecot need to be installed
 	if (_is_installed dovecot && [ -n "$clientauth" ]); then
@@ -373,7 +378,7 @@ cntcfg_dovecot_smtpd_auth_pwfile() {
 }
 
 cntcfg_postfix_domains() {
-	# NOTE: entries are appended so does work well with FORCE_CONFIG
+	# NOTE: entries are appended so does NOT work well with FORCE_CONFIG
 	# configure domains if we have recipients
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	if [ -n "$domains" ] && ([ -n "$LDAP_HOST" ] || [ -n "$MAIL_BOXES" ]); then
@@ -405,6 +410,7 @@ cntcfg_amavis_domains() {
 }
 
 cntcfg_amavis_dkim() {
+	# NOTE: entries are appended so does NOT work well with FORCE_CONFIG
 	# generate and activate dkim domainkey.
 	# incase of multi domain generate key for first domain only, but accept it
 	# to be used for all domains specified.
@@ -535,13 +541,13 @@ cntrun_acme_postfix_tls_cert() {
 	if (_is_installed inotify-tools && [ -f $ACME_FILE ]); then
 		scr_info 0 "Configuring acme-tls"
 		HOSTNAME=${HOSTNAME-$(hostname)}
-		ACME_TLS_CERT_FILE=$ACME_TLS_DIR/certs/${HOSTNAME}.crt
-		ACME_TLS_KEY_FILE=$ACME_TLS_DIR/private/${HOSTNAME}.key
+		ACME_TLS_CERT_FILE=$acme_dump_tls_dir/certs/${HOSTNAME}.crt
+		ACME_TLS_KEY_FILE=$acme_dump_tls_dir/private/${HOSTNAME}.key
 		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$ACME_TLS_CERT_FILE}
 		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$ACME_TLS_KEY_FILE}
-		local runit_dir=$docker_build_runit_dir/acme
-		mkdir -p $postfix_smtpd_tls_dir $ACME_TLS_DIR $runit_dir
-		cat <<-! > $runit_dir/run
+		local runit_dir=$docker_runit_dir/acme
+		mkdir -p $postfix_smtpd_tls_dir $acme_dump_tls_dir $runit_dir
+		cat <<-!cat > $runit_dir/run
 			#!/bin/bash -e
 			
 			# redirect stdout/stderr to syslog
@@ -549,15 +555,70 @@ cntrun_acme_postfix_tls_cert() {
 			exec 2> >(logger -p mail.notice)
 			
 			dump() {
-			  dumpcerts.sh $ACME_FILE $ACME_TLS_DIR
+			  dumpcerts.sh $ACME_FILE $acme_dump_tls_dir
 			}
 			dump
 			while true; do
 			  inotifywait -e modify $ACME_FILE
 			  dump
 			done
-		!
+		!cat
 		chmod +x $runit_dir/run
+	fi
+}
+
+cntcnf_acme_postfix_tls_cert() {
+	# we are potentially updating $SMTPD_TLS_CERT_FILE and $SMTPD_TLS_KEY_FILE,
+	# so we need to run this func before cntcfg_postfix_tls_cert and 
+	# cntcfg_postfix_apply_envvars
+	if (which dumpcerts.sh >/dev/null && [ -f $ACME_FILE ]); then
+		scr_info 0 "Configuring acme-tls"
+		ln -sf $ACME_FILE $acme_dump_json_link
+		HOSTNAME=${HOSTNAME-$(hostname)}
+		ACME_TLS_CERT_FILE=$acme_dump_tls_dir/certs/${HOSTNAME}.crt
+		ACME_TLS_KEY_FILE=$acme_dump_tls_dir/private/${HOSTNAME}.key
+		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$ACME_TLS_CERT_FILE}
+		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$ACME_TLS_KEY_FILE}
+		# run the cronjob so we do not have to wait up to 15min
+		$acme_dump_cron_job -initiate
+	fi
+}
+
+imgcfg_acme_dump_cronjob() {
+	# 1) do we need to create acme/run every time cnt is created?
+	# 2) we need to know remember HOSTNAME from initial config = we keep it in postconf
+	# cron knows envvars: /etc/periodic/15min/acme-update
+	# but with cron we need file lock
+	# we do not know HOSTNAME during build and we need it to know which file
+	# to use
+	if which dumpcerts.sh >/dev/null; then
+		scr_info 0 "Setting up acme-update cron job"
+		cat <<-!cat > $acme_dump_cron_job
+			#!/bin/sh -e
+			# define helper
+			dump() { dumpcerts.sh $acme_dump_json_link $acme_dump_tls_dir ;}
+			# exit now if there is a lock file and/or there is no ACME_FILE
+			if ([ -e $acme_dump_json_link ] && [ ! -e $acme_dump_cron_lock ]); then
+				# redirect stdout/stderr to syslog by using named pipes
+				mkfifo acme-update.stdout acme-update.stderr
+				logger -t acme-update -p mail.info   < acme-update.stdout &
+				logger -t acme-update -p mail.notice < acme-update.stderr &
+				exec 1> acme-update.stdout
+				exec 2> acme-update.stderr
+				# touch lock file 
+				touch $acme_dump_cron_lock
+				if [ -z "\$1" ]; then
+				    # forever run dump whenever $ACME_FILE is changed
+				    inotifyd dump $acme_dump_json_link:c
+				else
+				    # initial run if we have an arg
+				    dump
+				fi
+				# if inotifyd exits remove lock and named pipes
+				rm -f $acme_dump_cron_lock acme-update.stdout acme-update.stderr
+			fi
+		!cat
+		chmod +x $acme_dump_cron_job
 	fi
 }
 
@@ -627,8 +688,6 @@ cntcfg_razor_register() {
 			else
 				scr_info 1 "Not registering razor, cannot ping $razor_url"
 			fi
-#		else
-#			scr_info 1 "razor already registered"
 		fi
 		_chowncond $razor_runas $razor_home
 	fi
@@ -712,7 +771,7 @@ cntrun_cli_and_exit "$@"
 
 #cntrun_chown_home
 cntrun_prune_pidfiles
-cntrun_acme_postfix_tls_cert
+#cntrun_acme_postfix_tls_cert
 cntrun_cfgall
 update_loglevel
 
@@ -720,5 +779,5 @@ update_loglevel
 # start services
 #
 
-exec runsvdir -P $docker_build_runit_dir
+exec runsvdir -P $docker_runit_dir
 
