@@ -153,16 +153,13 @@ test-up_3: test-up-net test-cert-gen
 
 test-up_4: test-up-net test-cert-gen
 	#
-	# test (4) basic sasl
+	# test (4) basic sasl and acme tls
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
-		-e MAIL_BOXES="$(TST_BOX)" \
-		-e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT) \
+		-e MAIL_BOXES="$(TST_BOX)" $(TST_ATLS) \
 		-e SMTPD_SASL_CLIENTAUTH="$(TST_USR1):{plain}$(TST_PWD1) $(TST_USR2):{plain}$(TST_PWD2)" \
 		$(IMG_REPO):$(IMG_VER)-mda
-	docker cp $(TST_KEY) $(TST_SRV):$(TST_PKEY)
-	docker cp $(TST_CRT) $(TST_SRV):$(TST_PCRT)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e SMTP_RELAY_HOSTAUTH="[$(TST_SRV)]:587 $(TST_USR2):$(TST_PWD2)" \
@@ -184,14 +181,14 @@ test-up_5: test-up-net
 		-e MYDESTINATION= -e LOG_LEVEL=$(TST_ALOG) \
 		$(IMG_REPO):$(IMG_VER)-milter
 
-test-up_6: test-up-net test-cert-gen
+test-up_6: test-up-net
 	#
 	# test (6) dkim and multiple domains
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX2)" -e MAIL_DOMAIN="$(TST_DOM) $(TST_DOM2)" \
-		-v $(TST_SRV)-srv:/srv $(TST_ATLS) \
+		-v $(TST_SRV)-srv:/srv \
 		$(IMG_REPO):$(IMG_VER)-full
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \

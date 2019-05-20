@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 # Copyright (c) 2017 Brian 'redbeard' Harrington <redbeard@dead-city.org>
 #
 # dumpcerts.sh - A simple utility to explode a Traefik acme.json file into a
@@ -36,9 +36,10 @@
 # 4 - The destination certificate directory does not exist
 # 8 - Missing private key
 
-set -o errexit
-set -o pipefail
+#set -o errexit
+##set -o pipefail
 set -o nounset
+#set -o verbose
 
 USAGE="$(basename "$0") <path to acme> <destination cert directory>"
 
@@ -115,7 +116,7 @@ fi
 
 # If they do not exist, create the needed subdirectories for our assets
 # and place each in a variable for later use, normalizing the path
-mkdir -p "${certdir}"/{certs,private}
+mkdir -p "${certdir}/certs" "${certdir}/private"
 
 pdir="${certdir}/private/"
 cdir="${certdir}/certs/"
@@ -151,8 +152,8 @@ trap 'umask ${oldumask}' EXIT
 # *because* of openssl combined with the fact that it will refuse to write the
 # key if it does not parse out correctly. The other mechanisms were left as
 # comments so that the user can choose the mechanism most appropriate to them.
-echo -e "-----BEGIN RSA PRIVATE KEY-----\n${priv}\n-----END RSA PRIVATE KEY-----" \
-   | fold -w 64 | openssl rsa -inform pem -out "${pdir}/letsencrypt.key"
+printf "-----BEGIN RSA PRIVATE KEY-----\n${priv}\n-----END RSA PRIVATE KEY-----\n" \
+	| fold -w 65 | openssl rsa -inform pem -out "${pdir}/letsencrypt.key"
 
 # Process the certificates for each of the domains in acme.json
 domains=$(jq -r '.Certificates[].Domain.Main' ${acmefile}) || bad_acme
@@ -161,7 +162,7 @@ for domain in $domains; do
 	# bundle there is both proper the certificate and the Let's Encrypt CA
 	echo "Extracting cert bundle for ${domain}"
 	cert=$(jq -e -r --arg domain "$domain" '.Certificates[] |
-         	select (.Domain.Main == $domain )| .Certificate' ${acmefile}) || bad_acme
+		select (.Domain.Main == $domain )| .Certificate' ${acmefile}) || bad_acme
 	echo "${cert}" | ${CMD_DECODE_BASE64} > "${cdir}/${domain}.crt"
 
 	echo "Extracting private key for ${domain}"

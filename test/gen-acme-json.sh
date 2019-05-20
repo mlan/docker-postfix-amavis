@@ -18,7 +18,7 @@ cat <<-!cat
       },
       "uri": "https://acme-v02.api.letsencrypt.org/acme/acct/$RANDOM"
     },
-    "PrivateKey": "$(sed '/^-----/d' $keyfile | sed ':a;N;$!ba;s/\n/ /g')",
+    "PrivateKey": "$(sed '/^-----/d' $keyfile | sed ':a;N;$!ba;s/\n//g')",
     "KeyType": "2048"
   },
   "Certificates": [

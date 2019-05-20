@@ -22,6 +22,7 @@ ARG	SYSLOG_LEVEL=4
 COPY setup-runit.sh /usr/local/bin/.
 COPY entrypoint.sh /usr/local/bin/.
 COPY sa-learn.sh /usr/local/bin/.
+COPY dumpcerts.sh /usr/local/bin/.
 
 #
 # Install
@@ -87,13 +88,16 @@ FROM	mta AS mda
 # remove private key that dovecot creates
 #
 
-RUN	apk --no-cache --update add dovecot \
+RUN	apk --no-cache --update add \
+	dovecot \
+	jq \
 	&& setup-runit.sh "dovecot -F" \
 	&& rm -f /etc/ssl/dovecot/* \
 	&& addgroup postfix dovecot && addgroup dovecot postfix \
 	&& conf imgcfg_dovecot_passwdfile \
-	&& conf imgdir_persist /etc/dovecot
-
+	&& conf imgdir_persist /etc/dovecot \
+	&& mkdir -p /etc/ssl/acme \
+	&& conf imgcfg_acme_dump_cronjob
 
 #
 #
@@ -127,6 +131,7 @@ RUN	apk --no-cache --update add \
 	unrar \
 	p7zip \
 	ncurses \
+	tzdata \
 	&& setup-runit.sh \
 	"amavisd foreground" \
 	"freshclam -d --quiet" \
@@ -174,21 +179,8 @@ RUN	apk --no-cache --update add \
 FROM	milter AS full
 
 #
-# Copy utility scripts to image
-#
-
-COPY dumpcerts.sh /usr/local/bin/.
-
-#
 # Install
 #
 
 RUN	apk --no-cache --update add \
-	inotify-tools \
-	jq \
-	openssl \
-	util-linux \
-	bash \
-	tzdata \
-	&& mkdir -p /etc/ssl/acme \
-	&& conf imgcfg_acme_dump_cronjob
+	tzdata 
