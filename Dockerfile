@@ -4,13 +4,13 @@ ARG	REL=latest
 
 #
 #
-# target: mta
+# target: mini
 #
 # postfix only
 #
 #
 
-FROM	$DIST:$REL AS mta
+FROM	$DIST:$REL AS mini
 LABEL	maintainer=mlan
 
 ARG	SYSLOG_LEVEL=4
@@ -75,13 +75,13 @@ ENTRYPOINT ["entrypoint.sh"]
 
 #
 #
-# target: mda
+# target: base
 #
 # add dovecot
 #
 #
 
-FROM	mta AS mda
+FROM	mini AS base
 
 #
 # Install
@@ -97,18 +97,19 @@ RUN	apk --no-cache --update add \
 	&& conf imgcfg_dovecot_passwdfile \
 	&& conf imgdir_persist /etc/dovecot \
 	&& mkdir -p /etc/ssl/acme \
-	&& conf imgcfg_acme_dump_cronjob
+	&& conf imgcfg_runit_acme_dump
 
 #
 #
-# target: milter
+# target: full
 #
 # add anti-spam and anti-virus mail filters
 # as well as dkim and spf
+# add tzdata to allow time zone to be configured
 #
 #
 
-FROM	mda AS milter
+FROM	base AS full
 
 #
 # Install
@@ -165,22 +166,3 @@ RUN	apk --no-cache --update add \
 		/etc/clamav/freshclam.conf /etc/postfix/main.cf /etc/postfix/master.cf \
 	&& conf imgdir_persist /etc/amavis /etc/mail /etc/clamav \
 		/var/amavis /var/db/dkim /var/lib/spamassassin /var/lib/clamav
-
-
-#
-#
-# target: full
-#
-# add letsencrypt support via traefik
-# add tzdata to allow time zone to be configured
-#
-#
-
-FROM	milter AS full
-
-#
-# Install
-#
-
-RUN	apk --no-cache --update add \
-	tzdata 

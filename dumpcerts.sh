@@ -41,6 +41,9 @@
 set -o nounset
 #set -o verbose
 
+acme_dump_tls_dir=${acme_dump_tls_dir-/etc/ssl/acme}
+acme_dump_json_link=${acme_dump_json_link-$acme_dump_tls_dir/acme.json}
+
 USAGE="$(basename "$0") <path to acme> <destination cert directory>"
 
 # Platform variations
@@ -73,16 +76,20 @@ ${USAGE}" >&2
 	exit 2
 }
 
-if [ $# -ne 2 ]; then
-	echo "
-Insufficient number of parameters.
+#if [ $# -ne 2 ]; then
+#	echo "
+#Insufficient number of parameters.
+#
+#${USAGE}" >&2
+#	exit 1
+#fi
 
-${USAGE}" >&2
-	exit 1
-fi
+# when called by inotifyd the first argument is the single character 
+# event desciptior, lets drop it
+[ ${#1} -eq 1 ] && shift
 
-readonly acmefile="${1}"
-readonly certdir="${2%/}"
+readonly acmefile="${1-$acme_dump_json_link}"
+readonly certdir="${2-$acme_dump_tls_dir}"
 
 if [ ! -r "${acmefile}" ]; then
 	echo "

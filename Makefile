@@ -31,8 +31,8 @@ TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) -e TZ=$(TST_TZ) \
 TST_MSG  ?= ---test-message---
 TST_KEY  ?= local_priv_key.pem
 TST_CRT  ?= local_ca_cert.pem
-TST_ACME ?= local_acme.json
-TST_ATLS ?= -e ACME_FILE=/acme.json -v $(shell pwd)/$(TST_ACME):/acme.json:ro
+TST_ACME ?= test/acme/acme.json
+TST_ATLS ?= -e ACME_FILE=/acme/acme.json -v $(shell pwd)/$(shell dirname $(TST_ACME)):/acme
 TST_CRTD ?= 30
 TST_PKEY ?= /etc/ssl/postfix/priv.pem
 TST_PCRT ?= /etc/ssl/postfix/cert.pem
@@ -61,7 +61,7 @@ TST_W8S2 ?= 40
 TST_W8L1 ?= 20
 TST_W8L2 ?= 120
 
-.PHONY: build build-all build-mta build-mda build-milter build-full ps \
+.PHONY: build build-all build-mini build-base build-full ps \
     prune test-debugtools-srv test-learn-bayes test-learn-spam test-regen-edh-srv \
     test-all test-mail test-cert-rm test-down test-logs-clt test-logs-srv \
     test-cmd-clt test-cmd-srv test-diff-clt test-diff-srv
@@ -69,23 +69,17 @@ TST_W8L2 ?= 120
 build: Dockerfile
 	docker build $(BLD_ARG) --target full -t $(IMG_REPO):$(IMG_VER) .
 
-build-all: build-mta build-mda build-milter build-full
+build-all: build-mini build-base build-full
 
-build-mta: Dockerfile
-	docker build $(BLD_ARG) --target mta -t $(IMG_REPO):$(IMG_VER)-mta .
+build-mini: Dockerfile
+	docker build $(BLD_ARG) --target mini -t $(IMG_REPO):$(IMG_VER)-mini .
 
-build-mda: Dockerfile
-	docker build $(BLD_ARG) --target mda -t $(IMG_REPO):$(IMG_VER)-mda .
-
-build-milter: Dockerfile
-	docker build $(BLD_ARG) --target milter -t $(IMG_REPO):$(IMG_VER)-milter .
+build-base: Dockerfile
+	docker build $(BLD_ARG) --target base -t $(IMG_REPO):$(IMG_VER)-base .
 
 build-full: Dockerfile
 	docker build $(BLD_ARG) --target full -t $(IMG_REPO):$(IMG_VER)-full \
 		-t $(IMG_REPO)\:$(IMG_VER) .
-
-build-dkim: Dockerfile
-	docker build $(BLD_ARG) --target dkim -t $(IMG_REPO):$(IMG_VER)-sasl .
 
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
@@ -112,12 +106,12 @@ test-up_1: test-up-net
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX)" \
-		$(IMG_REPO):$(IMG_VER)-mta
+		$(IMG_REPO):$(IMG_VER)-mini
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= \
-		$(IMG_REPO):$(IMG_VER)-mta
+		$(IMG_REPO):$(IMG_VER)-mini
 
 test-up_2: test-up-net test-up-auth
 	#
@@ -127,12 +121,12 @@ test-up_2: test-up-net test-up-auth
 		--network $(TST_NET) $(TST_ENV) \
 		-e LDAP_HOST=$(TST_AUTH) -e LDAP_USER_BASE=ou=$(LDAP_UOU),$(LDAP_BAS) \
 		-e LDAP_QUERY_FILTER_USER=$(LDAP_MTH) \
-		$(IMG_REPO):$(IMG_VER)-mta
+		$(IMG_REPO):$(IMG_VER)-mini
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= \
-		$(IMG_REPO):$(IMG_VER)-mta
+		$(IMG_REPO):$(IMG_VER)-mini
 
 test-up_3: test-up-net test-cert-gen
 	#
@@ -142,14 +136,14 @@ test-up_3: test-up-net test-cert-gen
 		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX)" \
 		-e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT) \
-		$(IMG_REPO):$(IMG_VER)-mta
+		$(IMG_REPO):$(IMG_VER)-mini
 	docker cp $(TST_KEY) $(TST_SRV):$(TST_PKEY)
 	docker cp $(TST_CRT) $(TST_SRV):$(TST_PCRT)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
-		$(IMG_REPO):$(IMG_VER)-mta
+		$(IMG_REPO):$(IMG_VER)-mini
 
 test-up_4: test-up-net test-cert-gen
 	#
@@ -159,13 +153,13 @@ test-up_4: test-up-net test-cert-gen
 		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX)" $(TST_ATLS) \
 		-e SMTPD_SASL_CLIENTAUTH="$(TST_USR1):{plain}$(TST_PWD1) $(TST_USR2):{plain}$(TST_PWD2)" \
-		$(IMG_REPO):$(IMG_VER)-mda
+		$(IMG_REPO):$(IMG_VER)-base
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e SMTP_RELAY_HOSTAUTH="[$(TST_SRV)]:587 $(TST_USR2):$(TST_PWD2)" \
 		-e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
-		$(IMG_REPO):$(IMG_VER)-mta
+		$(IMG_REPO):$(IMG_VER)-mini
 
 test-up_5: test-up-net
 	#
@@ -174,12 +168,12 @@ test-up_5: test-up-net
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e MAIL_BOXES="$(TST_BOX)" \
-		$(IMG_REPO):$(IMG_VER)-milter
+		$(IMG_REPO):$(IMG_VER)-full
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e LOG_LEVEL=$(TST_ALOG) \
-		$(IMG_REPO):$(IMG_VER)-milter
+		$(IMG_REPO):$(IMG_VER)-full
 
 test-up_6: test-up-net
 	#
@@ -283,6 +277,7 @@ $(TST_KEY):
 	openssl genrsa -out $(TST_KEY)
 
 $(TST_ACME): $(TST_CRT)
+	mkdir -p $(shell dirname $(TST_ACME))
 	test/gen-acme-json.sh $(TST_RADR)@$(TST_DOM) srv.$(TST_DOM) $(TST_KEY) $(TST_CRT) > $(TST_ACME)
 
 test-cert-rm:

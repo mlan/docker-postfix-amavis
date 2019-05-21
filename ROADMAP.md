@@ -2,13 +2,13 @@
 
 ## OpenDMARK
 
-Include in build target `milter` in Dockerfile
+Include in build target `full` in Dockerfile
 
 Add configuration function in entrypoint.sh
 
 ## Dovecot IMAP and POP3
 
-Accommodate IMAP and POP3 configuration via environment variables
+Accommodate IMAP and POP3 configuration via environment variables in build target `base`
 
 ## Pyzor
 

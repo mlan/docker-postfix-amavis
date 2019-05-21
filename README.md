@@ -12,7 +12,7 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 Feature list follows below
 
 - MTA (SMTP) server and client [Postfix](http://www.postfix.org/)
-- Anti-spam filter [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/) 
+- Anti-spam filter [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/)
 - Anti-virus [ClamAV](https://www.clamav.net/)
 - Sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail)
 - SMTP client authentication on the submission port 587 using [Dovecot](https://www.dovecot.org/)
@@ -24,7 +24,7 @@ Feature list follows below
 - Simplified configuration of [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail) keys using environment variables
 - Simplified configuration of SMTP [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) using environment variables
 - Simplified generation of Diffie-Hellman parameters needed for [EDH](https://en.wikipedia.org/wiki/Diffie–Hellman_key_exchange) using utility script
-- Multi-staged build providing the images `full`, `milter`, `mda` and `mta`
+- Multi-staged build providing the images `mini`, `base` and `full`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
 - Built in utility script `conf` helping configuring Postfix, AMaViS, SpamAssassin, Razor, ClamAV and Dovecot
@@ -40,7 +40,7 @@ used. In addition to the three number version number you can use two or
 one number versions numbers, which refers to the latest version of the 
 sub series. The tag `latest` references the build based on the latest commit to the repository.
 
-The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `full`, `milter`, `mda` or `mta`. The image with the tag `full`, which is the default, contain Postfix with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), sender authentication and integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `milter` does _not_ integrate the [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using [Traefik](https://docs.traefik.io/). The image built with the tag `mda` only include [Postfix](http://www.postfix.org/)  and [Dovecot](https://www.dovecot.org/), which provides mail delivery via IMAP and POP3 and SMTP client authentication. Finally the image `mta` only contain Postfix.
+The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `mini`, `base` and `full`. The image `mini` only contain Postfix. The image built with the tag `base` extend  `mini` to include [Dovecot](https://www.dovecot.org/), which provides mail delivery via IMAP and POP3 and SMTP client authentication as well as integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `full`, which is the default, extend `base` with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), and sender authentication via [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
 
 To exemplify the usage of the tags, lets assume that the latest version is `1.0.0`. In this case `latest`, `1.0.0`, `1.0`, `1`, `full`, `full-1.0.0`, `full-1.0` and `full-1` all identify the same image.
 
@@ -99,16 +99,10 @@ services:
     depends_on:
       - auth
     environment:
-      - MESSAGE_SIZE_LIMIT=${MESSAGE_SIZE_LIMIT-25600000}
       - LDAP_HOST=auth
       - VIRTUAL_TRANSPORT=lmtp:mail-app:2003
-      - SMTP_RELAY_HOSTAUTH=${SMTP_RELAY_HOSTAUTH-}
-      - SMTP_TLS_SECURITY_LEVEL=${SMTP_TLS_SECURITY_LEVEL-}
-      - SMTP_TLS_WRAPPERMODE=${SMTP_TLS_WRAPPERMODE-no}
       - LDAP_USER_BASE=ou=${LDAP_USEROU-users},${LDAP_BASE-dc=example,dc=com}
       - LDAP_QUERY_FILTER_USER=(&(objectclass=${LDAP_USEROBJ-posixAccount})(mail=%s))
-      - DKIM_SELECTOR=${DKIM_SELECTOR-default}
-      - SYSLOG_LEVEL=4
     volumes:
       - mail-mta:/srv
 
