@@ -1,3 +1,7 @@
+# 1.3.1
+- Fixed the ACME TLS hook
+- Fixed some minor bugs in demo/Makefile
+
 # 1.3.0
 - Simplify registering with razor so that spam signatures can be checked and shared
 - Consolidated build targets into `mini`, `base` and `full`

@@ -34,7 +34,7 @@ auth-up:
 	docker-compose up -d auth
 
 auth-down:
-	docker-compose down auth
+	docker-compose rm -s auth
 
 auth-cmd:
 	docker-compose exec auth /bin/sh
@@ -56,10 +56,10 @@ mail-mta-up:
 	docker-compose up -d mail-mta
 
 mail-mta-down:
-	docker-compose down mail-mta
+	docker-compose rm -s mail-mta
 
 mail-mta-cmd:
-	docker-compose exec mail-mta /bin/bash
+	docker-compose exec mail-mta /bin/sh
 
 mail-mta-logs:
 	docker container logs $(COMPOSE_PROJECT_NAME)_mail-mta_1
@@ -78,7 +78,7 @@ mail-db-up:
 	docker-compose up -d mail-db
 
 mail-db-down:
-	docker-compose down mail-db
+	docker-compose rm -s mail-db
 
 mail-db-cmd:
 	docker-compose exec mail-db /bin/bash
@@ -93,7 +93,7 @@ mail-app-up:
 	docker-compose up -d mail-app
 
 mail-app-down:
-	docker-compose down mail-app
+	docker-compose rm -s mail-app
 
 mail-app-cmd:
 	docker-compose exec mail-app /bin/bash

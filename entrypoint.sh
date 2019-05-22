@@ -238,8 +238,9 @@ imgcfg_runit_acme_dump() {
 			exec $(which inotifyd) $(which dumpcerts.sh) $acme_dump_json_link:c
 		!cat
 		chmod +x $acme_dump_sv_dir/run
-		# do not start this service by default
-		touch $acme_dump_sv_dir/down
+		# make sure that there is a file that inotifyd can monitor
+		# we will replace this file if we detect a proper one
+		touch $acme_dump_json_link
 	fi
 }
 
@@ -598,8 +599,6 @@ cntcnf_acme_postfix_tls_cert() {
 		# run the cronjob so we do not have to wait up to 15min
 		local message="$(dumpcerts.sh $acme_dump_json_link $acme_dump_tls_dir 2>&1 | sed ':a;N;$!ba;s/\n/ - /g')"
 		scr_info 0 "$message"
-		# make sure the acme dump service starts
-		rm -f $acme_dump_sv_dir/down
 	fi
 }
 
