@@ -1,0 +1,34 @@
+#!/bin/sh
+# amavisd-ls
+
+amavis_home=${amavis_home-/var/amavis}
+amavis_quarantine=${amavis_quarantine-$amavis_home/quarantine}
+
+mails="$(find $amavis_quarantine -type f)"
+
+if [ "$(postconf -h virtual_mailbox_domains)" = '$mydomain' ]; then
+	mydomain="$(postconf -h mydomain)"
+fi
+
+qlist=$(for mail in $mails; do
+	if [ "${mail##*.}" = "gz" ]; then
+		headers="$(gunzip -c $mail)"
+	else
+		headers="$(cat $mail)"
+	fi
+	head_cat=$(echo "$headers" | sed -rn 's/^Delivered-To: (.*)-quarantine/\1/p')
+	head_from=$(echo "$headers" | sed -rn 's/^X-Envelope-From: <(.*)>/\1/p')
+	head_x_to=$(echo "$headers" | sed -rn 's/^X-Envelope-To: <(.*)>/\1/p')
+	head_h_to=$(echo "$head_h_to" | sed -rn 's/^To: (.*)/\1/p')
+	head_to=$(echo "$headers" | sed 's/.* //g' | sed 's/<*>*//g' | sed s/@${mydomain- }//g)
+	head_id=$(echo "$headers" | sed -rn 's/^X-Quarantine-ID: <(.*)>/\1/p')
+	head_alert=$(echo "$headers" | sed -rn 's/^X-Amavis-Alert: (.*)/\1/p')
+	head_score=$(echo "$headers" | sed -rn 's/^X-Spam-Score: (.*)/\1/p')
+	head_h_date=$(echo "$headers" | sed -rn 's/^Date: (.*)/\1/p')
+	head_date=$(echo "$head_h_date" | sed -rn 's/([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+).*/\4-\3-\2 \5/p')
+	printf "%s\t%s\t%s\t%s\n" $head_id $head_cat $head_date $head_to $head_from
+done)
+
+printf "\n%s\t%s\t%s\t%s\t%s\n" QUARANTINE-ID THREAT ENVELOPE-RECEIVED-DATE ORIGINAL-TO ENVELOPE-FROM
+echo "$qlist"
+echo

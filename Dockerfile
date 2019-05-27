@@ -16,13 +16,10 @@ LABEL	maintainer=mlan
 ARG	SYSLOG_LEVEL=4
 
 #
-# Copy utility scripts to image
+# Copy utility scripts including entrypoint.sh to image
 #
 
-COPY setup-runit.sh /usr/local/bin/.
-COPY entrypoint.sh /usr/local/bin/.
-COPY sa-learn.sh /usr/local/bin/.
-COPY dumpcerts.sh /usr/local/bin/.
+COPY src/ /usr/local/bin/
 
 #
 # Install
