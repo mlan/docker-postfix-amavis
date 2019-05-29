@@ -1,3 +1,10 @@
+# 1.3.2
+- New utility script amavisd-ls which lists contents of quarantine
+- Make sure duplicate entries are NOT created with FORCE_CONFIG
+- Use default value if MAIL_DOMAIN is empty and HOSTNAME is not FQDC
+- New behaviour; DKIM_SELECTOR must be set for DKIM to be configured
+- Added smoke test
+
 # 1.3.1
 - Fixed the ACME TLS hook
 - Fixed some minor bugs in demo/Makefile

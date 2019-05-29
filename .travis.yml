@@ -11,6 +11,7 @@ before_script:
   - sudo apt-get install -y ldap-utils openssl jq
 
 script:
+  - make test-up_0
   - make test_1
   - make test_2
   - make test_3

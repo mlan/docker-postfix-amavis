@@ -38,7 +38,6 @@ RUN	apk --update add \
 	cyrus-sasl-plain \
 	cyrus-sasl-login \
 	; fi \
-	&& ln -s /usr/local/bin/entrypoint.sh /usr/local/bin/conf \
 	&& setup-runit.sh \
 	"syslogd -n -O /dev/stdout -l $SYSLOG_LEVEL" \
 	"crond -f -c /etc/crontabs" \

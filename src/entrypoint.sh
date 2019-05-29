@@ -7,6 +7,7 @@
 docker_runit_dir=${docker_runit_dir-/etc/service}
 docker_persist_dir=${docker_persist_dir-/srv}
 docker_config_lock=${docker_config_lock-/etc/postfix/docker-config-lock}
+docker_default_domain=${docker_default_domain-example.com}
 postfix_sasl_passwd=${postfix_sasl_passwd-/etc/postfix/sasl-passwords}
 postfix_virt_mailbox=${postfix_virt_mailbox-/etc/postfix/virt-users}
 postfix_virt_domain=${postfix_virt_domain-/etc/postfix/virt-domains}
@@ -317,7 +318,36 @@ imgcfg_cpfile() {
 _need_config() { [ ! -f "$docker_config_lock" ] || [ -n "$FORCE_CONFIG" ] ;}
 	# true if there is no lock file or FORCE_CONFIG is not empty
 
-_is_installed() { apk -e info $1 &>/dev/null ;} # true if apk is installed
+_is_installed() { apk -e info $1 &>/dev/null ;} # true if pkg is installed
+
+_cond_append() {
+	# append entry if it is not already there
+	# if mode is -i then append before last line
+	local mode filename lineraw lineesc
+	case $1 in
+		-i) mode=i; shift;;
+		-a) mode=a; shift;;
+		 *) mode=a;;
+	esac
+	filename=$1
+	shift
+	lineraw=$@
+	lineesc="$(echo $lineraw | sed 's/[\";/*]/\\&/g')"
+	if [ -e "$filename" ]; then
+		if [ -z "$(sed -n '/'"$lineesc"'/p' $filename)" ]; then
+			scr_info -1 "_cond_append append: $mode $filename $lineraw"
+			case $mode in
+				a) echo "$lineraw" >> $filename;;
+				i) sed -i "$ i\\$lineesc" $filename;;
+			esac
+		else
+			scr_info 1 "Avoiding duplication: $filename $lineraw"
+		fi
+	else
+		scr_info -1 "_cond_append create: $mode $filename $lineraw"
+		echo "$lineraw" >> $filename
+	fi
+}
 
 lock_config() {
 	if [ -z "$FORCE_CONFIG" ]; then
@@ -329,7 +359,8 @@ lock_config() {
 
 cntrun_cfgall() {
 	if _need_config; then
-		cntcnf_acme_postfix_tls_cert
+		cntcfg_default_domains
+		cntcfg_acme_postfix_tls_cert
 		cntcfg_amavis_domains
 		cntcfg_amavis_dkim
 		cntcfg_amavis_apply_envvars
@@ -372,37 +403,44 @@ cntcfg_postfix_smtp_auth_pwfile() {
 }
 
 cntcfg_dovecot_smtpd_auth_pwfile() {
-	# NOTE: entries are appended so does NOT work well with FORCE_CONFIG
 	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	# dovecot need to be installed
 	if (_is_installed dovecot && [ -n "$clientauth" ]); then
 		scr_info 0 "Enabling client SASL via submission"
 		# create client passwd file used for autentication
 		for entry in $clientauth; do
-			# consider persist
-			echo $entry >> $dovecot_users
+			_cond_append $dovecot_users $entry
 		done
 		# enable sasl auth on the submission port
-		postconf -e smtpd_sasl_auth_enable=yes
 		postconf -M "submission/inet=submission inet n - n - - smtpd"
 		postconf -P "submission/inet/smtpd_sasl_auth_enable=yes"
 		postconf -P "submission/inet/smtpd_sasl_type=dovecot"
 		postconf -P "submission/inet/smtpd_sasl_path=private/auth"
 		postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
+#		postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
+#		postconf -P "submission/inet/smtpd_tls_auth_only=yes"
 		postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
 		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
 	fi
 }
 
+cntcfg_default_domains() {
+	# run first to make sure MAIL_DOMAIN is not empty
+	local domains=${MAIL_DOMAIN-$(hostname -d)}
+	if [ -z "$domains" ]; then
+		export MAIL_DOMAIN=$docker_default_domain
+		scr_info 1 "No MAIL_DOMAIN, non FQDC HOSTNAME, so using $MAIL_DOMAIN"
+	fi
+}
+
 cntcfg_postfix_domains() {
-	# NOTE: entries are appended so does NOT work well with FORCE_CONFIG
 	# configure domains if we have recipients
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	if [ -n "$domains" ] && ([ -n "$LDAP_HOST" ] || [ -n "$MAIL_BOXES" ]); then
 		scr_info 0 "Configuring postfix for domains $domains"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
 			for domain in $domains; do
-				echo "$domain #domain" >> $postfix_virt_domain
+				_cond_append $postfix_virt_domain "$domain #domain"
 			done
 			postconf virtual_mailbox_domains=hash:$postfix_virt_domain
 			postmap  hash:$postfix_virt_domain
@@ -414,10 +452,11 @@ cntcfg_postfix_domains() {
 }
 
 cntcfg_amavis_domains() {
+	# NOTE: the contanare only starts if either MAIL_DOMAIN or hostname is fqdn
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	local domain_main=$(echo $domains | sed 's/\s.*//')
 	local domain_extra=$(echo $domains | sed 's/[^ ]* *//' | sed 's/[^ ][^ ]*/"&"/g' | sed 's/ /, /g')
-	if _is_installed amavisd-new; then
+	if (_is_installed amavisd-new && [ -n "$domain_main" ]); then
 		scr_info 0 "Configuring amavis for domains $domains"
 		modify $amavis_cf '\$mydomain' = "'"$domain_main"';"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
@@ -427,7 +466,6 @@ cntcfg_amavis_domains() {
 }
 
 cntcfg_amavis_dkim() {
-	# NOTE: entries are appended so does NOT work well with FORCE_CONFIG
 	# generate and activate dkim domainkey.
 	# incase of multi domain generate key for first domain only, but accept it
 	# to be used for all domains specified.
@@ -435,22 +473,15 @@ cntcfg_amavis_dkim() {
 	local domain_main=$(echo $domains | sed 's/\s.*//')
 	local user=$amavis_runas
 	local bits=${DKIM_KEYBITS-2048}
-	local selector=${DKIM_SELECTOR-default}
+	local selector=${DKIM_SELECTOR}
 	local keyfile=$dkim_dir/$domain_main.$selector.privkey.pem
 	local txtfile=$dkim_dir/$domain_main.$selector._domainkey.txt
 	local keystring="$DKIM_PRIVATEKEY"
-	if _is_installed amavisd-new; then
+	if (_is_installed amavisd-new && [ -n "$selector" ] && [ -n "$domain_main" ]); then
 		scr_info 0 "Setting dkim selector and domain to $selector and $domain_main"
 		# insert config statements just before last line
-		local lastline="$(sed -i -e '$ w /dev/stdout' -e '$d' $amavis_cf)"
-		cat <<-!cat >> $amavis_cf
-			dkim_key("$domain_main", "$selector", "$keyfile");
-			@dkim_signature_options_bysender_maps = ( { "." => { ttl => 21*24*3600, c => "relaxed/simple" } } );
-			
-			
-			$lastline
-		!cat
-		#nl $amavis_cf | tail -n 20
+		_cond_append -i $amavis_cf '@dkim_signature_options_bysender_maps = ( { "." => { ttl => 21*24*3600, c => "relaxed/simple" } } );'
+		_cond_append -i $amavis_cf 'dkim_key("'$domain_main'", "'$selector'", "'$keyfile'");'
 		if [ -n "$keystring" ]; then
 			if [ -e $keyfile ]; then
 				scr_info 1 "Overwriting private dkim key here $keyfile"
@@ -458,7 +489,7 @@ cntcfg_amavis_dkim() {
 				scr_info 0 "Writing private dkim key here $keyfile"
 			fi
 			if echo "$keystring" | grep "PRIVATE KEY" - > /dev/null; then
-				echo "$keystring" fold -w 64 >> $keyfile
+				echo "$keystring" fold -w 64 > $keyfile
 			else
 				echo "-----BEGIN RSA PRIVATE KEY-----" > $keyfile
 				echo "$keystring" | fold -w 64 >> $keyfile
@@ -531,11 +562,7 @@ cntcfg_postfix_mailbox_auth_file() {
 	if [ -n "$emails" ]; then
 		scr_info 0 "Configuring postfix-virt-mailboxes"
 		for email in $emails; do
-			echo $email $email >> $postfix_virt_mailbox
-#			echo $email ${email#*@}/${email%@*} >> $postfix_virt_mailbox
-#			if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
-#				mkdir -m 777 -p $mail_dir/${email#*@}
-#			fi
+			_cond_append $postfix_virt_mailbox $email $email
 		done
 		postconf alias_maps=
 		postconf alias_database=
@@ -551,52 +578,19 @@ cntcfg_postfix_mailbox_auth_file() {
 	fi
 }
 
-cntrun_acme_postfix_tls_cert() {
-	# we are potentially updating $SMTPD_TLS_CERT_FILE and $SMTPD_TLS_KEY_FILE
-	# here so we need to run this func before cntcfg_postfix_tls_cert and cntcfg_postfix_apply_envvars
-	ACME_FILE=${ACME_FILE-/acme/acme.json}
-	if (_is_installed inotify-tools && [ -f $ACME_FILE ]); then
-		scr_info 0 "Configuring acme-tls"
-		HOSTNAME=${HOSTNAME-$(hostname)}
-		ACME_TLS_CERT_FILE=$acme_dump_tls_dir/certs/${HOSTNAME}.crt
-		ACME_TLS_KEY_FILE=$acme_dump_tls_dir/private/${HOSTNAME}.key
-		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$ACME_TLS_CERT_FILE}
-		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$ACME_TLS_KEY_FILE}
-		local runit_dir=$docker_runit_dir/acme
-		mkdir -p $postfix_smtpd_tls_dir $acme_dump_tls_dir $runit_dir
-		cat <<-!cat > $runit_dir/run
-			#!/bin/bash -e
-			
-			# redirect stdout/stderr to syslog
-			exec 1> >(logger -p mail.info)
-			exec 2> >(logger -p mail.notice)
-			
-			dump() {
-			  dumpcerts.sh $ACME_FILE $acme_dump_tls_dir
-			}
-			dump
-			while true; do
-			  inotifywait -e modify $ACME_FILE
-			  dump
-			done
-		!cat
-		chmod +x $runit_dir/run
-	fi
-}
-
-cntcnf_acme_postfix_tls_cert() {
+cntcfg_acme_postfix_tls_cert() {
 	# we are potentially updating $SMTPD_TLS_CERT_FILE and $SMTPD_TLS_KEY_FILE,
 	# so we need to run this func before cntcfg_postfix_tls_cert and 
 	# cntcfg_postfix_apply_envvars
 	if (_is_installed jq && [ -f $ACME_FILE ]); then
-		scr_info 0 "Configuring acme-tls"
-		ln -sf $ACME_FILE $acme_dump_json_link
 		HOSTNAME=${HOSTNAME-$(hostname)}
+		scr_info 0 "Configuring acme-tls for host $HOSTNAME"
+		ln -sf $ACME_FILE $acme_dump_json_link
 		ACME_TLS_CERT_FILE=$acme_dump_tls_dir/certs/${HOSTNAME}.crt
 		ACME_TLS_KEY_FILE=$acme_dump_tls_dir/private/${HOSTNAME}.key
 		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$ACME_TLS_CERT_FILE}
 		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$ACME_TLS_KEY_FILE}
-		# run the cronjob so we do not have to wait up to 15min
+		# run dumpcerts.sh on cnt creation (and every time the json file changes)
 		local message="$(dumpcerts.sh $acme_dump_json_link $acme_dump_tls_dir 2>&1 | sed ':a;N;$!ba;s/\n/ - /g')"
 		scr_info 0 "$message"
 	fi
