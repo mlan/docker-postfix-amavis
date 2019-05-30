@@ -2,8 +2,10 @@
 - New utility script amavisd-ls which lists contents of quarantine
 - Make sure duplicate entries are NOT created with FORCE_CONFIG
 - Use default value if MAIL_DOMAIN is empty and HOSTNAME is not FQDC
-- New behaviour; DKIM_SELECTOR must be set for DKIM to be configured
+- New behaviour; DKIM_SELECTOR must be non empty for DKIM to be configured
+- Now use [Multiple cleanup service architecture](https://amavis.org/README.postfix.html#d0e1038)
 - Added smoke test
+- Changed test-mail in Makefile so that it connects to postfix smtp service
 
 # 1.3.1
 - Fixed the ACME TLS hook
@@ -11,7 +13,7 @@
 
 # 1.3.0
 - Simplify registering with razor so that spam signatures can be checked and shared
-- Consolidated build targets into `mini`, `base` and `full`
+- Consolidated build targets into `mini`, `base` and `full`
 - Fixed razor installation
 - Moved hooks for integrating Let’s Encrypt ACME TLS certs to target `base`
 - Fixed the ACME TLS hook

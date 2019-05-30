@@ -7,6 +7,9 @@ BLD_VER  ?= latest
 IMG_REPO ?= $(BLD_REPO)
 IMG_VER  ?= $(BLD_VER)
 _ver      = $(if $(findstring latest,$(1)),$(2),$(1)-$(2))
+_ip       = $(shell docker inspect -f \
+	'{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
+	$(1) | head -n1)
 IMG_CMD  ?= /bin/sh
 
 TST_PORT ?= 25
@@ -287,8 +290,10 @@ test-auth-srv:
 
 test-mail-send_%:
 	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
-	printf "subject:Test\nfrom:$(TST_SADR)@$(TST_DOM)\n$(TST_MSG)$*\n" \
-	| docker exec -i $(TST_CLT) sendmail $(TST_RADR)@$(tst_dom)
+	printf "EHLO mua.$(TST_DOM)\nMAIL FROM: <$(TST_SADR)@$(TST_DOM)>\nRCPT TO: <$(TST_RADR)@$(tst_dom)>\nDATA\nFrom: <$(TST_SADR)@$(TST_DOM)>\nTo: <$(TST_RADR)@$(tst_dom)>\nDate: $$(date)\nSubject:Test\n\n$(TST_MSG)$*\n.\nQUIT\n" \
+	| docker exec -i $(TST_CLT) nc localhost 25
+#	printf "subject:Test\nfrom:$(TST_SADR)@$(TST_DOM)\n$(TST_MSG)$*\n" \
+#	| docker exec -i $(TST_CLT) sendmail $(TST_RADR)@$(tst_dom)
 
 test-mail-read_%:
 	$(eval tst_str := $(shell if [ $* -eq 6 ]; then echo DKIM-Signature; else echo ^$(TST_MSG)$*; fi ))
