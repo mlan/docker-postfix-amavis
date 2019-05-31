@@ -36,9 +36,9 @@ TST_TZ   ?= UTC
 TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) -e TZ=$(TST_TZ) \
 		-e SA_TAG_LEVEL_DEFLT=$(TST_STAG) -e SA_DEBUG=$(TST_SBUG) -e LOG_LEVEL=$(TST_ALOG)
 TST_MSG  ?= ---test-message---
-TST_KEY  ?= local_priv_key.pem
-TST_CRT  ?= local_ca_cert.pem
-TST_ACME ?= test/acme/acme.json
+TST_KEY  ?= tmp/local_priv_key.pem
+TST_CRT  ?= tmp/local_ca_cert.pem
+TST_ACME ?= tmp/acme/acme.json
 TST_ATLS ?= -e ACME_FILE=/acme/acme.json -v $(shell pwd)/$(shell dirname $(TST_ACME)):/acme
 TST_CRTD ?= 30
 TST_PKEY ?= /etc/ssl/postfix/priv.pem
@@ -305,7 +305,7 @@ $(TST_CRT): $(TST_KEY)
 	openssl req -x509 -utf8 -new -batch -days $(TST_CRTD) \
 		-subj "/CN=$(TST_SRV)" -key $(TST_KEY) -out $(TST_CRT)
 
-$(TST_KEY):
+$(TST_KEY): tmp
 	openssl genrsa -out $(TST_KEY)
 
 $(TST_ACME): $(TST_CRT)
@@ -350,6 +350,9 @@ test-learn-bayes:
 
 seed:
 	mkdir -p seed
+
+tmp:
+	mkdir -p tmp
 
 test-export-bayes: seed
 	docker exec -i $(TST_SRV) sa-learn --backup > seed/bayesian.database.bak
