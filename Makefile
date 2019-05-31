@@ -231,7 +231,7 @@ test-up_7: test-up-net test_6
 		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) \
-		-v $(TST_SRV)-srv:/srv \
+		-v $(TST_CLT)-srv:/srv \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
 
 test-up_8: test-up-net test_7
