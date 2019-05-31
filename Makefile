@@ -64,9 +64,9 @@ CNT_IP    = $(shell docker inspect -f \
 	$(1) | head -n1)
 
 TST_W8S1 ?= 1
-TST_W8S2 ?= 40
+TST_W8S2 ?= 60
 TST_W8L1 ?= 20
-TST_W8L2 ?= 120
+TST_W8L2 ?= 180
 
 .PHONY: build build-all build-mini build-base build-full ps \
     prune test-debugtools-srv test-learn-bayes test-learn-spam test-regen-edh-srv \
