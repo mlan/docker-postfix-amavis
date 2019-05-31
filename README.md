@@ -328,7 +328,11 @@ Postfix can use a table as a source for any of its lookups including virtual mai
 
 #### `MAIL_BOXES`
 
-Using the `MAIL_BOXES` environment variable you simply provide a space separated list with all email addressees that Postfix should accept incoming mail to. For example: `MAIL_BOXES="info@example.com abuse@example.com"`. The default value is empty.
+Using the `MAIL_BOXES` environment variable you simply provide a space separated list with all email addresses that Postfix should accept incoming mail to. For example: `MAIL_BOXES="info@example.com abuse@example.com"`. The default value is empty.
+
+#### `MAIL_ALIASES`
+
+Using the `MAIL_ALIASES` environment variable you simply provide a space separated list with email alias addresses that Postfix should accept incoming mail to, using the following syntax:  `MAIL_ALIASES="alias1:target1a,target1b alias2:target2"`. For example: `MAIL_ALIASES="root:info,info@example.com postmaster:root"`. The default value is empty.
 
 ## LDAP mailbox lookup
 

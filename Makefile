@@ -20,6 +20,7 @@ TST_SADR ?= sender
 TST_RADR ?= receiver
 TST_BOX  ?= $(TST_RADR)@$(TST_DOM) $(TST_SADR)@$(TST_DOM)
 TST_BOX2 ?= $(TST_RADR)@$(TST_DOM) $(TST_RADR)@$(TST_DOM2)
+TST_ALS  ?= root:$(TST_RADR),$(TST_RADR)@$(TST_DOM) postmaster:$(TST_RADR)
 TST_HOST ?= mx.$(TST_DOM)
 TST_NET  ?= test-net
 TST_CLT  ?= test-client
@@ -137,7 +138,7 @@ test-up_1: test-up-net
 		-e MAIL_BOXES="$(TST_BOX)" \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
+		--network $(TST_NET) $(TST_ENV) -e MAIL_ALIASES="$(TST_ALS)" \
 		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)

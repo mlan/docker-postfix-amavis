@@ -1,4 +1,5 @@
 # 1.3.2
+- Now support configuring aliases database using environment variable MAIL_ALIASES
 - New utility script amavisd-ls which lists contents of quarantine
 - Make sure duplicate entries are NOT created with FORCE_CONFIG
 - Use default value if MAIL_DOMAIN is empty and HOSTNAME is not FQDC

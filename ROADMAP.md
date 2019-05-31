@@ -1,5 +1,10 @@
 # Road map
 
+## Build
+
+#### avoid uniqe keys
+When installing the openssl package keys are generated which we better remove from the image.
+
 ## Amavisd optimization
 Lets see if we can optimaze the amavisd parameters so that we can improve
 its throughput using ideas in [amavisd-new, advanced configuration and management](https://www.ijs.si/software/amavisd/amavisd-new-magdeburg-20050519.pdf)

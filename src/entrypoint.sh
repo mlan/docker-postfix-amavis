@@ -11,6 +11,7 @@ docker_default_domain=${docker_default_domain-example.com}
 postfix_sasl_passwd=${postfix_sasl_passwd-/etc/postfix/sasl-passwords}
 postfix_virt_mailbox=${postfix_virt_mailbox-/etc/postfix/virt-users}
 postfix_virt_domain=${postfix_virt_domain-/etc/postfix/virt-domains}
+postfix_aliases=${postfix_aliases-/etc/postfix/aliases}
 mail_dir=${mail_dir-/var/mail}
 postfix_cf=${postfix_cf-/etc/postfix/main.cf}
 postfix_runas=${postfix_runas-postfix}
@@ -324,6 +325,15 @@ imgcfg_cpfile() {
 	done
 }
 
+imgcfg_mvfile() {
+	local suffix=$1
+	shift
+	local cfs=$@
+	for cf in $cfs; do
+		mv "$cf" "$cf.$suffix"
+	done
+}
+
 #
 # package config procedure
 #
@@ -380,8 +390,9 @@ cntrun_cfgall() {
 		cntcfg_dovecot_smtpd_auth_pwfile
 		cntcfg_postfix_domains
 		cntcfg_postfix_smtp_auth_pwfile
-		cntcfg_postfix_mailbox_auth_file
+		cntcfg_postfix_mailbox_auth_hash
 		cntcfg_postfix_mailbox_auth_ldap
+		cntcfg_postfix_alias_map
 		cntcfg_postfix_tls_cert
 		cntcfg_postfix_apply_envvars
 		cntcfg_spamassassin_update
@@ -401,7 +412,7 @@ cntcfg_postfix_smtp_auth_pwfile() {
 	local host=${hostauth% *}
 	local auth=${hostauth#* }
 	if [ -n "$host" ]; then
-		scr_info 0 "Using SMTP relay: $host"
+		scr_info 0 "Configuring postfix SMTP relay: $host"
 		postconf -e relayhost=$host
 		if [ -n "$auth" ]; then
 			postconf -e smtp_sasl_auth_enable=yes
@@ -411,7 +422,7 @@ cntcfg_postfix_smtp_auth_pwfile() {
 			postmap hash:$postfix_sasl_passwd
 		fi
 	else
-		scr_info 0 "No SMTP relay defined"
+		scr_info -1 "No SMTP relay defined"
 	fi
 }
 
@@ -419,7 +430,7 @@ cntcfg_dovecot_smtpd_auth_pwfile() {
 	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	# dovecot need to be installed
 	if (_is_installed dovecot && [ -n "$clientauth" ]); then
-		scr_info 0 "Enabling client SASL via submission"
+		scr_info 0 "Enabling postfix-dovecot client SASL via submission"
 		# create client passwd file used for autentication
 		for entry in $clientauth; do
 			_cond_append $dovecot_users $entry
@@ -427,15 +438,17 @@ cntcfg_dovecot_smtpd_auth_pwfile() {
 		# enable sasl auth on the submission port
 		postconf -M "submission/inet=submission inet n - n - - smtpd"
 		postconf -P "submission/inet/syslog_name=postfix/submission"
-		postconf -P "submission/inet/cleanup_service_name=pre-cleanup"
 		postconf -P "submission/inet/smtpd_sasl_auth_enable=yes"
 		postconf -P "submission/inet/smtpd_sasl_type=dovecot"
 		postconf -P "submission/inet/smtpd_sasl_path=private/auth"
 		postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
-#		postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
-#		postconf -P "submission/inet/smtpd_tls_auth_only=yes"
+		postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
+		postconf -P "submission/inet/smtpd_tls_auth_only=yes"
 		postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
 		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
+		if _is_installed amavisd-new; then
+			postconf -P "submission/inet/cleanup_service_name=pre-cleanup"
+		fi
 	fi
 }
 
@@ -547,9 +560,9 @@ _cntgen_postfix_ldapmap() {
 
 cntcfg_postfix_mailbox_auth_ldap() {
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ]); then
-		scr_info 0 "Configuring postfix-ldap"
-		postconf alias_maps=
-		postconf alias_database=
+		scr_info 0 "Configuring postfix-ldap with ldap-host $LDAP_HOST"
+#		postconf alias_maps=
+#		postconf alias_database=
 		postconf virtual_mailbox_maps=ldap:$postfix_ldap_users_cf
 		_cntgen_postfix_ldapmap "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_USER" > $postfix_ldap_users_cf
 		if [ -n "$LDAP_QUERY_FILTER_ALIAS" ]; then
@@ -572,15 +585,15 @@ cntcfg_postfix_mailbox_auth_ldap() {
 	fi
 }
 
-cntcfg_postfix_mailbox_auth_file() {
+cntcfg_postfix_mailbox_auth_hash() {
 	local emails="${1-$MAIL_BOXES}"
 	if [ -n "$emails" ]; then
 		scr_info 0 "Configuring postfix-virt-mailboxes"
 		for email in $emails; do
 			_cond_append $postfix_virt_mailbox $email $email
 		done
-		postconf alias_maps=
-		postconf alias_database=
+#		postconf alias_maps=
+#		postconf alias_database=
 		postconf virtual_mailbox_maps=hash:$postfix_virt_mailbox
 		postmap hash:$postfix_virt_mailbox
 		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
@@ -590,6 +603,25 @@ cntcfg_postfix_mailbox_auth_file() {
 			postconf virtual_uid_maps=static:$(id -u $postfix_runas)
 			postconf virtual_gid_maps=static:$(id -g $postfix_runas)
 		fi
+	fi
+}
+
+cntcfg_postfix_alias_map() {
+	# MAIL_ALIASES="alias1:target1a,target1b alias2:target2"
+	local aliasmaps="${1-$MAIL_ALIASES}"
+	if [ -n "$aliasmaps" ]; then
+		scr_info 0 "Config. postfix aliases"
+		for aliasmap in $aliasmaps; do
+			_cond_append $postfix_aliases $(echo "$aliasmap" | sed 's/[:,]/& /g')
+		done
+		postconf alias_maps=hash:$postfix_aliases
+		postconf alias_database=hash:$postfix_aliases
+		postalias $postfix_aliases
+		newaliases
+	else
+		scr_info -1 "No postfix aliases defined"
+		postconf alias_maps=
+		postconf alias_database=
 	fi
 }
 
@@ -652,7 +684,7 @@ cntcfg_spamassassin_update() {
 	# Download rules for spamassassin at start up.
 	# There is also an daily cron job that updates these.
 	if _is_installed spamassassin; then
-		scr_info 0 "Updating rules for spamassassin"
+		scr_info 0 "Updating spamassassin rules"
 		( sa-update ) &
 	fi
 }
@@ -668,7 +700,7 @@ cntcfg_razor_register() {
 		scr_info 0 "Discovering razor servers"
 		razor-admin -home=$razor_home -create
 		if ([ -n "$auth" ] && [ ! -e $razor_identity ]); then
-			# register an identity if RAZOR_REGISTRATION is notempty
+			# register an identity if RAZOR_REGISTRATION is not empty
 			[ -n "$user" ] && user="-user=$user"
 			[ -n "$pass" ] && pass="-pass=$pass"
 			if ping -c1 $razor_url >/dev/null 2>&1; then
@@ -706,7 +738,7 @@ doveadm_pw() { doveadm pw -p $1 ;}
 update_loglevel() {
 	local loglevel=${1-$SYSLOG_LEVEL}
 	if [ -n "$loglevel" ]; then
-		scr_info 0 "Setting syslogd level to $loglevel"
+		scr_info 0 "Setting syslogd level = $loglevel"
 		setup-runit.sh "syslogd -n -O /dev/stdout -l $loglevel"
 	fi
 	if [ "$calledformcli" = true ]; then
