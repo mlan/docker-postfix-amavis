@@ -6,7 +6,7 @@
 When installing the openssl package keys are generated which we better remove from the image.
 
 ## Amavisd optimization
-Lets see if we can optimaze the amavisd parameters so that we can improve
+Lets see if we can optimize the amavisd parameters so that we can improve
 its throughput using ideas in [amavisd-new, advanced configuration and management](https://www.ijs.si/software/amavisd/amavisd-new-magdeburg-20050519.pdf)
 
 ## Amavisd MySQL Quarantine
@@ -56,7 +56,9 @@ $bad_header_quarantine_method = 'sql:';
 # You can set it to 1 (the default) to test if Amavis is filling correctly the tables maddr, msgs, and msgcrpt
 $sql_store_info_for_all_msgs = 0;
 ```
-## OpenDMARK
+## OpenDMARC
+
+Consider installing opendmarc once it is available in alpine:3.10. 
 
 Include in build target `full` in Dockerfile
 
@@ -68,4 +70,8 @@ Accommodate IMAP and POP3 configuration via environment variables in build targe
 
 ## Pyzor
 
-Consider installing pyzor once it is avaiable in alpine:3.10
+Consider installing pyzor once it is available in alpine:3.10
+
+Include in build target `full` in Dockerfile
+
+Add configuration function in entrypoint.sh
