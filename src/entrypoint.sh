@@ -444,8 +444,11 @@ cntcfg_dovecot_smtpd_auth_pwfile() {
 		postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
 		postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
 		postconf -P "submission/inet/smtpd_tls_auth_only=yes"
+		postconf -P "submission/inet/smtpd_tls_wrappermode=yes"
 		postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
-		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
+		postconf -P "submission/inet/smtpd_recipient_restrictions=permit_auth_destination,reject"
+#		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
+
 		if _is_installed amavisd-new; then
 			postconf -P "submission/inet/cleanup_service_name=pre-cleanup"
 		fi
