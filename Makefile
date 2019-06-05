@@ -64,9 +64,9 @@ CNT_IP    = $(shell docker inspect -f \
 	$(1) | head -n1)
 
 TST_W8S1 ?= 1
-TST_W8S2 ?= 60
+TST_W8S2 ?= 40
 TST_W8L1 ?= 20
-TST_W8L2 ?= 180
+TST_W8L2 ?= 120
 
 .PHONY: build build-all build-mini build-base build-full ps \
     prune test-debugtools-srv test-learn-bayes test-learn-spam test-regen-edh-srv \
@@ -193,11 +193,11 @@ test-up_4: test-up-net test-cert-gen
 
 test-up_5: test-up-net
 	#
-	# test (5) basic milter function
+	# test (5) basic milter function and selfsigned tls
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
-		-e MAIL_BOXES="$(TST_BOX)" \
+		-e MAIL_BOXES="$(TST_BOX)" -e SMTPD_USE_TLS=yes \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
@@ -341,6 +341,16 @@ test-dkim-key:
 
 test-cert-gen: $(TST_ACME)
 
+test-tls-srv_%:
+	$(eval tst_starttls := $(shell if [ $* != 465 ]; then echo --starttls smtp; fi ))
+	docker run --rm -it --network $(TST_NET) drwetter/testssl.sh $(tst_starttls) $(TST_SRV):$* || true
+
+test-smtp-srv: test-tls-srv_25
+	
+test-smtps-srv: test-tls-srv_465
+	
+test-subm-srv: test-tls-srv_587
+	
 test-debugtools-srv:
 	docker exec -it $(TST_SRV) apk --no-cache --update add \
 	nano less lsof htop openldap-clients bind-tools iputils

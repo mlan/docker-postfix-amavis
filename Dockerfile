@@ -52,10 +52,10 @@ RUN	apk --update add \
 	&& conf imgdir_persist /etc/postfix /etc/ssl /var/spool/postfix /var/mail
 
 #
-# state standard smtp and submission ports
+# state standard smtp, smtps and submission ports
 #
 
-EXPOSE 25 587
+EXPOSE 25 465 587
 
 #
 # Rudimentary healthcheck

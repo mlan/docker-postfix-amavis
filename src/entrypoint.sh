@@ -31,7 +31,6 @@ razor_url=${razor_url-discovery.razor.cloudmark.com}
 razor_home=${razor_home-/var/amavis/.razor}
 razor_identity=${razor_identity-$razor_home/identity}
 razor_runas=${razor_runas-amavis}
-#dovecot_cf=${dovecot_cf-/etc/dovecot/conf.d/99-docker.conf}
 acme_dump_tls_dir=${acme_dump_tls_dir-/etc/ssl/acme}
 acme_dump_json_link=${acme_dump_json_link-$acme_dump_tls_dir/acme.json}
 acme_dump_sv_dir=${acme_dump_sv_dir-$docker_runit_dir/acme}
@@ -393,7 +392,8 @@ cntrun_cfgall() {
 		cntcfg_postfix_mailbox_auth_hash
 		cntcfg_postfix_mailbox_auth_ldap
 		cntcfg_postfix_alias_map
-		cntcfg_postfix_tls_cert
+		cntcfg_postfix_generate_tls_cert
+		cntcfg_postfix_activate_tls_cert
 		cntcfg_postfix_apply_envvars
 		cntcfg_spamassassin_update
 		cntcfg_razor_register
@@ -444,13 +444,24 @@ cntcfg_dovecot_smtpd_auth_pwfile() {
 		postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
 		postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
 		postconf -P "submission/inet/smtpd_tls_auth_only=yes"
-		postconf -P "submission/inet/smtpd_tls_wrappermode=yes"
 		postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
 		postconf -P "submission/inet/smtpd_recipient_restrictions=permit_auth_destination,reject"
 #		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
-
+		postconf -M "smtps/inet=smtps inet n - n - - smtpd"
+		postconf -P "smtps/inet/syslog_name=postfix/smtps"
+		postconf -P "smtps/inet/smtpd_sasl_auth_enable=yes"
+		postconf -P "smtps/inet/smtpd_sasl_type=dovecot"
+		postconf -P "smtps/inet/smtpd_sasl_path=private/auth"
+		postconf -P "smtps/inet/smtpd_sasl_security_options=noanonymous"
+		postconf -P "smtps/inet/smtpd_tls_security_level=encrypt"
+		postconf -P "smtps/inet/smtpd_tls_auth_only=yes"
+		postconf -P "smtps/inet/smtpd_tls_wrappermode=yes"
+		postconf -P "smtps/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
+		postconf -P "smtps/inet/smtpd_recipient_restrictions=permit_auth_destination,reject"
+#  postconf -P "smtps/inet/smtpd_reject_unlisted_recipient=yes"
 		if _is_installed amavisd-new; then
 			postconf -P "submission/inet/cleanup_service_name=pre-cleanup"
+			postconf -P "smtps/inet/cleanup_service_name=pre-cleanup"
 		fi
 	fi
 }
@@ -564,8 +575,6 @@ _cntgen_postfix_ldapmap() {
 cntcfg_postfix_mailbox_auth_ldap() {
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ]); then
 		scr_info 0 "Configuring postfix-ldap with ldap-host $LDAP_HOST"
-#		postconf alias_maps=
-#		postconf alias_database=
 		postconf virtual_mailbox_maps=ldap:$postfix_ldap_users_cf
 		_cntgen_postfix_ldapmap "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_USER" > $postfix_ldap_users_cf
 		if [ -n "$LDAP_QUERY_FILTER_ALIAS" ]; then
@@ -630,7 +639,7 @@ cntcfg_postfix_alias_map() {
 
 cntcfg_acme_postfix_tls_cert() {
 	# we are potentially updating $SMTPD_TLS_CERT_FILE and $SMTPD_TLS_KEY_FILE,
-	# so we need to run this func before cntcfg_postfix_tls_cert and 
+	# so we need to run this func before cntcfg_postfix_activate_tls_cert and
 	# cntcfg_postfix_apply_envvars
 	if (_is_installed jq && [ -f $ACME_FILE ]); then
 		HOSTNAME=${HOSTNAME-$(hostname)}
@@ -646,10 +655,30 @@ cntcfg_acme_postfix_tls_cert() {
 	fi
 }
 
-cntcfg_postfix_tls_cert() {
-	if ([ -n "$SMTPD_TLS_CERT_FILE" ] || [ -n "$SMTPD_TLS_ECCERT_FILE" ]); then
+cntcfg_postfix_generate_tls_cert() {
+	# generate self signed certificate if SMTPD_USE_TLS=yes but no certificates
+	# are given
+	# run after cntcfg_acme_postfix_tls_cert and before cntcfg_postfix_activate_tls_cert
+	if ([ -z "$SMTPD_TLS_CERT_FILE" ] && [ -z "$SMTPD_TLS_ECCERT_FILE" ] && \
+		[ -z "$SMTPD_TLS_DCERT_FILE" ] && [ -z "$SMTPD_TLS_CHAIN_FILES" ] && \
+		[ "$SMTPD_USE_TLS" = "yes" ] && _is_installed openssl); then
+		scr_info 1 "SMTPD_USE_TLS=yes but no certs given, so generating self-signed cert for host $HOSTNAME"
+		HOSTNAME=${HOSTNAME-$(hostname)}
+		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$postfix_smtpd_tls_dir/rsakey.pem}
+		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$postfix_smtpd_tls_dir/rsacert.pem}
+		openssl genrsa -out $SMTPD_TLS_KEY_FILE
+		openssl req -x509 -utf8 -new -batch -subj "/CN=$HOSTNAME" \
+			-key $SMTPD_TLS_KEY_FILE -out $SMTPD_TLS_CERT_FILE
+	fi
+}
+
+cntcfg_postfix_activate_tls_cert() {
+	if ([ -n "$SMTPD_TLS_CERT_FILE" ] || [ -n "$SMTPD_TLS_ECCERT_FILE" ] || \
+		[ -n "$SMTPD_TLS_DCERT_FILE" ] || [ -n "$SMTPD_TLS_CHAIN_FILES" ]); then
 		scr_info 0 "Activating incoming tls"
 		postconf -e smtpd_use_tls=yes
+		postconf -e smtpd_tls_security_level=may
+		postconf -e smtpd_tls_auth_only=yes
 	fi
 }
 
@@ -718,7 +747,7 @@ cntcfg_razor_register() {
 }
 
 cntrun_chown_home() {
-	# do we need to check  /var/amavis/.spamassassin/bayes_journal ?
+	# do we need to check  /var/amavis/.spamassassin/bayes_journal?
 	_chowncond $postfix_runas $postfix_home
 	_chowncond $postfix_runas $mail_dir
 	_chowncond $amavis_runas  $amavis_home

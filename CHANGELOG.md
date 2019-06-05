@@ -1,3 +1,8 @@
+# 1.3.3
+- Now generate selfsigned certificate when needed; SMTPD_USE_TLS=yes but no certificates given
+- Hardening submission (port 587 using STARTTLS) by only accepting permit_auth_destination
+- Now also enable smtps (port 465 using implicit TLS)
+
 # 1.3.2
 - Now support configuring aliases database using environment variable MAIL_ALIASES
 - New utility script amavisd-ls which lists contents of quarantine
@@ -6,7 +11,7 @@
 - New behaviour; DKIM_SELECTOR must be non empty for DKIM to be configured
 - Now use [Multiple cleanup service architecture](https://amavis.org/README.postfix.html#d0e1038)
 - Added smoke test
-- Changed test-mail in Makefile so that it connects to postfix smtp service
+- Changed test-mail in Makefile so that it connects to postfix smtp service (and not pickup)
 
 # 1.3.1
 - Fixed the ACME TLS hook

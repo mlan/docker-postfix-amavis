@@ -1,9 +1,20 @@
 # Road map
 
-## Build
+## Dovecot IMAP and POP3
 
-#### avoid uniqe keys
-When installing the openssl package keys are generated which we better remove from the image.
+Accommodate IMAP and POP3 configuration via environment variables in build target `base`
+
+## OpenDMARC
+
+Consider installing opendmarc once it is available in alpine:3.10.
+Include in build target `full` in Dockerfile
+Add configuration function in entrypoint.sh
+
+## Pyzor
+
+Consider installing pyzor once it is available in alpine:3.10
+Include in build target `full` in Dockerfile
+Add configuration function in entrypoint.sh
 
 ## Amavisd optimization
 Lets see if we can optimize the amavisd parameters so that we can improve
@@ -56,22 +67,4 @@ $bad_header_quarantine_method = 'sql:';
 # You can set it to 1 (the default) to test if Amavis is filling correctly the tables maddr, msgs, and msgcrpt
 $sql_store_info_for_all_msgs = 0;
 ```
-## OpenDMARC
 
-Consider installing opendmarc once it is available in alpine:3.10. 
-
-Include in build target `full` in Dockerfile
-
-Add configuration function in entrypoint.sh
-
-## Dovecot IMAP and POP3
-
-Accommodate IMAP and POP3 configuration via environment variables in build target `base`
-
-## Pyzor
-
-Consider installing pyzor once it is available in alpine:3.10
-
-Include in build target `full` in Dockerfile
-
-Add configuration function in entrypoint.sh

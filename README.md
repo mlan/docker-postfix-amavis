@@ -15,7 +15,7 @@ Feature list follows below
 - Anti-spam filter [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/)
 - Anti-virus [ClamAV](https://www.clamav.net/)
 - Sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail)
-- SMTP client authentication on the submission port 587 using [Dovecot](https://www.dovecot.org/)
+- SMTP client authentication on the SMTPS (port 465) and submission (port 587) using [Dovecot](https://www.dovecot.org/)
 - Hooks for integrating [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using the reverse proxy [Traefik](https://docs.traefik.io/)
 - Consolidated configuration and run data under `/srv` to facilitate persistent storage
 - Simplified configuration of mailbox table lookup using environment variables
@@ -27,6 +27,7 @@ Feature list follows below
 - Multi-staged build providing the images `mini`, `base` and `full`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
+- Built in utility script `amavisd-ls` which lists contents of quarantine
 - Built in utility script `conf` helping configuring Postfix, AMaViS, SpamAssassin, Razor, ClamAV and Dovecot
 - Makefile which can build images and do some management and testing
 - Health check
@@ -40,7 +41,7 @@ used. In addition to the three number version number you can use two or
 one number versions numbers, which refers to the latest version of the 
 sub series. The tag `latest` references the build based on the latest commit to the repository.
 
-The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `mini`, `base` and `full`. The image `mini` only contain Postfix. The image built with the tag `base` extend  `mini` to include [Dovecot](https://www.dovecot.org/), which provides mail delivery via IMAP and POP3 and SMTP client authentication as well as integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `full`, which is the default, extend `base` with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), and sender authentication via [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
+The `mlan/postfix-amavis` repository contains a multi staged built. You select which build using the appropriate tag from `mini`, `base` and `full`. The image `mini` only contain Postfix. The image built with the tag `base` extend `mini` to include [Dovecot](https://www.dovecot.org/), which provides mail delivery via IMAP and POP3 and SMTP client authentication as well as integration of [Let’s Encrypt](https://letsencrypt.org/) TLS certificates using [Traefik](https://docs.traefik.io/). The image with the tag `full`, which is the default, extend `base` with anti-spam and ant-virus [milters](https://en.wikipedia.org/wiki/Milter), and sender authentication via [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
 
 To exemplify the usage of the tags, lets assume that the latest version is `1.0.0`. In this case `latest`, `1.0.0`, `1.0`, `1`, `full`, `full-1.0.0`, `full-1.0` and `full-1` all identify the same image.
 
@@ -169,7 +170,7 @@ If you do, you will notice that configuration variable names are all lower case,
 
 By default, docker will store the configuration and run data within the container. This has the drawback that the configurations and queued and quarantined mail are lost together with the container should it be deleted. It can therefore be a good idea to use docker volumes and mount the run directories and/or the configuration directories there so that the data will survive a container deletion.
 
-To facilitate such approach, to achieve persistent storage, the configuration and run directories of the services has been consolidated to `/srv/etc` and `/srv/var` respectively.  So if you to have chosen to use both persistent configuration and run data you can run the container like this:
+To facilitate such approach, to achieve persistent storage, the configuration and run directories of the services has been consolidated to `/srv/etc` and `/srv/var` respectively. So if you to have chosen to use both persistent configuration and run data you can run the container like this:
 
 ```
 docker run -d --name mail-mta -v mail-mta:/srv -p 127.0.0.1:25:25 mlan/postfix-amavis
@@ -191,9 +192,9 @@ mail without TLS encryption, by setting `SMTP_TLS_SECURITY_LEVEL=encrypt`. Defau
 
 To configure the Postfix SMTP client connecting using the legacy SMTPS protocol instead of using the STARTTLS command, set `SMTP_TLS_WRAPPERMODE=yes`. This mode requires `SMTP_TLS_SECURITY_LEVEL=encrypt` or stronger. Default: `SMTP_TLS_WRAPPERMODE=no`
 
-## Incoming submission client authentication
+## Incoming SMTPS and submission client authentication
 
-Postfix achieves client authentication using Dovecot. Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the `SMTP_RELAY_HOSTAUTH`.  Here the client authentication is arranged on the [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587.
+Postfix achieves client authentication using Dovecot. Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the `SMTP_RELAY_HOSTAUTH`. Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587. To avoid the risk of being an open relay the SMTPS and submission services are only activated when `SMTPD_SASL_CLIENTAUTH` is set. Additionally clients are required to authenticate using TLS to avoid password being sent in the clear. The configuration of the services are the similar with the exception that the SMTPS service uses the legacy SMTPS protocol; `SMTPD_TLS_WRAPPERMODE=yes`, whereas the submission service uses the STARTTLS protocol.
 
 #### `SMTPD_SASL_CLIENTAUTH`
 
@@ -221,15 +222,19 @@ use the host name of the container minus the first component. So you can either 
 
 Transport Layer Security (TLS, formerly called SSL) provides certificate-based authentication and encrypted sessions. An encrypted session protects the information that is transmitted with SMTP mail or with SASL authentication. 
 
-Here TLS is activated for inbound messages when `SMTPD_TLS_CERT_FILE` is not empty. The Postfix SMTP server generally needs a certificate and a private key. Both must be in "PEM" format. The private key must not be encrypted, meaning: the key must be accessible without a password. The certificate and a private key files are identified by `SMTPD_TLS_CERT_FILE` and `SMTPD_TLS_KEY_FILE`.
+Here TLS is activated for inbound messages when either `SMTPD_TLS_CHAIN_FILES` or `SMTPD_TLS_CERT_FILE` (or its [DSA](https://en.wikipedia.org/wiki/Digital_Signature_Algorithm) and [ECDSA](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) counterparts) is not empty or `SMTPD_USE_TLS=yes`. The Postfix SMTP server generally needs a certificate and a private key to provide TLS. Both must be in [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format. The private key must not be encrypted, meaning: the key must be accessible without a password. The [RSA](https://en.wikipedia.org/wiki/RSA_(cryptosystem)) certificate and a private key files are identified by `SMTPD_TLS_CERT_FILE` and `SMTPD_TLS_KEY_FILE`.
+
+#### `SMTPD_USE_TLS=yes`
+
+If `SMTPD_USE_TLS=yes` is explicitly defined but there are no certificate files defined, a self-signed certificate will be generated when the container is created.
 
 #### `SMTPD_TLS_CERT_FILE`
 
-Specifies the RSA certificate file within the container to be used with incoming TLS connections. Example `SMTPD_TLS_CERT_FILE=cert.pem`
+Specifies the [RSA](https://en.wikipedia.org/wiki/RSA_(cryptosystem)) [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) certificate file within the container to be used with incoming TLS connections. The certificate file need to be made available in the container by some means. Example `SMTPD_TLS_CERT_FILE=cert.pem`. Additionally there are the [DSA](https://en.wikipedia.org/wiki/Digital_Signature_Algorithm), [ECDSA](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) or chain counterparts; `SMTPD_TLS_DCERT_FILE`, `SMTPD_TLS_ECCERT_FILE` and `SMTPD_TLS_CHAIN_FILES`.
 
 #### `SMTPD_TLS_KEY_FILE`
 
-Specifies the RSA private key file within the container to be used with incoming TLS connections. Example `SMTPD_TLS_KEY_FILE=key.pem`
+Specifies the RSA PEM private key file within the container to be used with incoming TLS connections. The private key file need to be made available in the container by some means. Example `SMTPD_TLS_KEY_FILE=key.pem`. Additionally there are the DSA, ECDSA or chain counterparts; `SMTPD_TLS_DKEY_FILE`, `SMTPD_TLS_ECKEY_FILE` and `SMTPD_TLS_CHAIN_FILES`.
 
 ### TLS forward secrecy
 
@@ -261,7 +266,7 @@ Do not set `SMTPD_TLS_CERT_FILE` and/or `SMTPD_TLS_KEY_FILE` when using `ACME_FI
 
 ## Incoming anti-spam and anti-virus
 
-[amavisd-new](https://www.amavis.org/) is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or [SpamAssassin](https://spamassassin.apache.org/). Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS blocklists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
+[amavisd-new](https://www.amavis.org/) is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or [SpamAssassin](https://spamassassin.apache.org/). Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS block-lists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
 
 [Vipul's Razor](http://razor.sourceforge.net/) is a distributed, collaborative, spam detection and filtering network. It uses a fuzzy [checksum](http://en.wikipedia.org/wiki/Checksum) technique to identify
 message bodies based on signatures submitted by users, or inferred by 
@@ -273,8 +278,7 @@ AMaViS will only insert mail headers in incoming messages with domain mentioned 
 
 When an undesirable email is found, the action according to the `FINAL_*_DESTINY` variables will be taken. Possible settings for the `FINAL_*_DESTINY` variables are: `D_PASS`, `D_BOUNCE`,`D_REJECT` and `D_DISCARD`.
 
-
-`D_PASS`: Mail will pass to recipients, regardless of bad  contents. `D_BOUNCE`: Mail will not be delivered to its recipients, instead, a non-delivery notification (bounce) will be created and sent to the sender. `D_REJECT`: Mail will not be delivered to its  recipients, instead, a reject response will be sent to the upstream MTA and that MTA may create a reject notice (bounce) and return  it to the sender. `D_DISCARD`: Mail will not be delivered to its recipients and the sender normally will NOT be notified.
+`D_PASS`: Mail will pass to recipients, regardless of bad contents. `D_BOUNCE`: Mail will not be delivered to its recipients, instead, a non-delivery notification (bounce) will be created and sent to the sender. `D_REJECT`: Mail will not be delivered to its recipients, instead, a reject response will be sent to the upstream MTA and that MTA may create a reject notice (bounce) and return it to the sender. `D_DISCARD`: Mail will not be delivered to its recipients and the sender normally will NOT be notified.
 
 Default settings are: `FINAL_VIRUS_DESTINY=D_DISCARD`, `FINAL_BANNED_DESTINY=D_DISCARD`, `FINAL_SPAM_DESTINY=D_PASS`, `FINAL_BAD_HEADER_DESTINY=D_PASS`.
 
@@ -284,10 +288,10 @@ Default settings are: `FINAL_VIRUS_DESTINY=D_DISCARD`, `FINAL_BANNED_DESTINY=D_D
 
 #### `RAZOR_REGISTRATION`
 
-Razor, called by SpamAssassin,  will check if the signature of the received email is registered in the Razor servers and adjust the spam score accordingly. Razor can also report detected spam to its servers, but then it needs to use a registered identity.
+Razor, called by SpamAssassin, will check if the signature of the received email is registered in the Razor servers and adjust the spam score accordingly. Razor can also report detected spam to its servers, but then it needs to use a registered identity.
 
 To register an identity with the Razor server, use `RAZOR_REGISTRATION`. You can request to be know as a certain user name, `RAZOR_REGISTRATION=username:passwd`. If you omit both user name and password, e.g., `RAZOR_REGISTRATION=:`, they will both be assigned to you by the Razor server. Likewise if password is omitted a password will be assigned by the Razor server. Razor users are encouraged
-to use their email addresses as their user name. Example: `RAZOR_REGISTRATION=postmaster@example.com:secret` 
+to use their email addresses as their user name. Example: `RAZOR_REGISTRATION=postmaster@example.com:secret`
 
 ## Incoming SPF sender authentication
 
@@ -304,13 +308,12 @@ amavisd-new is configured to check the digital signature of incoming email as we
 The bit length used when creating new keys. Default: `DKIM_KEYBITS=2048`
 
 #### `DKIM_SELECTOR`
-The public key DNS record should appear as a TXT resource record at: `DKIM_SELECTOR._domainkey.MAIL_DOMAIN`.  The TXT record to be used with the private key generated at container creation is written here:  `/var/db/dkim/MAIL_DOMAIN.DKIM_SELECTOR._domainkey.txt`.  
-
-Default:  `DKIM_SELECTOR=default`
+The public key DNS record should appear as a TXT resource record at: `DKIM_SELECTOR._domainkey.MAIL_DOMAIN`. The TXT record to be used with the private key generated at container creation is written here: `/var/db/dkim/MAIL_DOMAIN.DKIM_SELECTOR._domainkey.txt`.
+Default: `DKIM_SELECTOR=default`
 #### `DKIM_PRIVATEKEY`
 DKIM uses a private and public key pair used for signing and verifying email. A private key is created when the container is created. If you already have a private key you can pass it to the container by using the environment variable `DKIM_PRIVATEKEY`. For convenience the strings `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----` can be omitted form the key string. For example `DKIM_PRIVATEKEY="MIIEpAIBAAKCAQEA04up8hoqzS...1+APIB0RhjXyObwHQnOzhAk"`
 
-The private key is stored here  `/var/db/dkim/MAIL_DOMAIN.DKIM_SELECTOR.privkey.pem`, so alternatively you can copy the private key into the container: 
+The private key is stored here `/var/db/dkim/MAIL_DOMAIN.DKIM_SELECTOR.privkey.pem`, so alternatively you can copy the private key into the container:
 
 ```bash
 docker cp $MAIL_DOMAIN.$DKIM_SELECTOR.privkey.pem <container_name>:var/db/dkim
@@ -332,7 +335,7 @@ Using the `MAIL_BOXES` environment variable you simply provide a space separated
 
 #### `MAIL_ALIASES`
 
-Using the `MAIL_ALIASES` environment variable you simply provide a space separated list with email alias addresses that Postfix should accept incoming mail to, using the following syntax:  `MAIL_ALIASES="alias1:target1a,target1b alias2:target2"`. For example: `MAIL_ALIASES="root:info,info@example.com postmaster:root"`. The default value is empty.
+Using the `MAIL_ALIASES` environment variable you simply provide a space separated list with email alias addresses that Postfix should accept incoming mail to, using the following syntax: `MAIL_ALIASES="alias1:target1a,target1b alias2:target2"`. For example: `MAIL_ALIASES="root:info,info@example.com postmaster:root"`. The default value is empty.
 
 ## LDAP mailbox lookup
 
@@ -377,7 +380,7 @@ The `mlan/postfix-amavis` image is designed primarily to work with a companion s
 
 Postfix delivers the messages to the companion software, like [Kolab](https://hub.docker.com/r/kvaps/kolab), [Kopano](https://cloud.docker.com/u/mlan/repository/docker/mlan/kopano) or [Zimbra](https://hub.docker.com/r/jorgedlcruz/zimbra/), using a transport mechanism you specify using the environment variable `VIRTUAL_TRANSPORT`. [LMTP](https://en.wikipedia.org/wiki/Local_Mail_Transfer_Protocol) is one such transport mechanism. One example of final delivery transport to Kopano is: `VIRTUAL_TRANSPORT=lmtp:app:2003`
 
-Local mail boxes will be created if there is no  `VIRTUAL_TRANSPORT` defined. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/info@example.com`.
+Local mail boxes will be created if there is no `VIRTUAL_TRANSPORT` defined. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/info@example.com`.
 
 ## Message size limit `MESSAGE_SIZE_LIMIT`
 
@@ -393,8 +396,8 @@ Sometimes want to authenticate SMTP client connecting to the submission port 578
 
 The level of output for logging is in the range from 0 to 8. 1 means emergency logging only, 2 for alert messages, 3 for critical messages only, 4 for error or worse, 5 for warning or worse, 6 for notice or worse, 7 for info or worse, 8 debug. Default: `SYSLOG_LEVEL=4`
 
-Separately, `LOG_LEVEL` and `SA_DEBUG` control the loging level of amavisd-new and spamassasin respectively.
-`LOG_LEVEL` takes valued from 0 to 5 and `SA_DEBUG` is etier 1 (activeated) or 0 (deactivated). Note that these messages will only appear in the log if `SYSLOG_LEVEL` is 7 or greater.
+Separately, `LOG_LEVEL` and `SA_DEBUG` control the logging level of amavisd-new and spamassasin respectively.
+`LOG_LEVEL` takes valued from 0 to 5 and `SA_DEBUG` is either 1 (activated) or 0 (deactivated). Note that these messages will only appear in the log if `SYSLOG_LEVEL` is 7 or greater.
 
 
 ## DNS records
