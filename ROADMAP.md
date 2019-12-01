@@ -1,18 +1,27 @@
 # Road map
 
+## amavisd-ls
+
+Perhaps, implement something more interactive using dialog?
+
+## Docker config lock
+
+Revisit the config lock. Now we depend on a single file. Feels unsafe.
+Perhaps we can rely on the conf dir being empty as an indicator?
+
 ## Dovecot IMAP and POP3
 
 Accommodate IMAP and POP3 configuration via environment variables in build target `base`
 
 ## OpenDMARC
 
-Consider installing opendmarc once it is available in alpine:3.10.
+Consider installing opendmarc once it is available in alpine:3.11.
 Include in build target `full` in Dockerfile
 Add configuration function in entrypoint.sh
 
 ## Pyzor
 
-Consider installing pyzor once it is available in alpine:3.10
+Consider installing pyzor once it is available in alpine:3.11
 Include in build target `full` in Dockerfile
 Add configuration function in entrypoint.sh
 

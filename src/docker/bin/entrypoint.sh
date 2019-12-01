@@ -4,8 +4,8 @@
 # config
 #
 
-docker_runit_dir=${docker_runit_dir-/etc/service}
-docker_persist_dir=${docker_persist_dir-/srv}
+DOCKER_RUNSV_DIR=${DOCKER_RUNSV_DIR-/etc/service}
+DOCKER_PERSIST_DIR=${DOCKER_PERSIST_DIR-/srv}
 docker_config_lock=${docker_config_lock-/etc/postfix/docker-config-lock}
 docker_default_domain=${docker_default_domain-example.com}
 postfix_sasl_passwd=${postfix_sasl_passwd-/etc/postfix/sasl-passwords}
@@ -33,7 +33,7 @@ razor_identity=${razor_identity-$razor_home/identity}
 razor_runas=${razor_runas-amavis}
 acme_dump_tls_dir=${acme_dump_tls_dir-/etc/ssl/acme}
 acme_dump_json_link=${acme_dump_json_link-$acme_dump_tls_dir/acme.json}
-acme_dump_sv_dir=${acme_dump_sv_dir-$docker_runit_dir/acme}
+acme_dump_sv_dir=${acme_dump_sv_dir-$DOCKER_RUNSV_DIR/acme}
 ACME_FILE=${ACME_FILE-/acme/acme.json}
 
 #
@@ -295,10 +295,10 @@ imgcfg_amavis_postfix() {
 imgdir_persist() {
 	# mv dir to persist location and leave a link to it
 	local srcdirs="$@"
-	if [ -n "$docker_persist_dir" ]; then
+	if [ -n "$DOCKER_PERSIST_DIR" ]; then
 		for srcdir in $srcdirs; do
 			if [ -e "$srcdir" ]; then
-				local dstdir="${docker_persist_dir}${srcdir}"
+				local dstdir="${DOCKER_PERSIST_DIR}${srcdir}"
 				local dsthome="$(dirname $dstdir)"
 				if [ ! -d "$dstdir" ]; then
 					scr_info 0 "Moving $srcdir to $dstdir"
@@ -650,8 +650,7 @@ cntcfg_acme_postfix_tls_cert() {
 		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$ACME_TLS_CERT_FILE}
 		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$ACME_TLS_KEY_FILE}
 		# run dumpcerts.sh on cnt creation (and every time the json file changes)
-		local message="$(dumpcerts.sh $acme_dump_json_link $acme_dump_tls_dir 2>&1 | sed ':a;N;$!ba;s/\n/ - /g')"
-		scr_info 0 "$message"
+		dumpcerts.sh $acme_dump_json_link $acme_dump_tls_dir
 	fi
 }
 
@@ -771,7 +770,7 @@ update_loglevel() {
 	local loglevel=${1-$SYSLOG_LEVEL}
 	if [ -n "$loglevel" ]; then
 		scr_info 0 "Setting syslogd level = $loglevel"
-		setup-runit.sh "syslogd -n -O /dev/stdout -l $loglevel"
+		setup-runit.sh "syslogd -n -O - $SYSLOG_OPTIONS -l $loglevel"
 	fi
 	if [ "$calledformcli" = true ]; then
 		sv restart syslogd
@@ -831,5 +830,5 @@ update_loglevel
 # start services
 #
 
-exec runsvdir -P $docker_runit_dir
+exec runsvdir -P $DOCKER_RUNSV_DIR
 

@@ -13,13 +13,16 @@ ARG	REL=latest
 FROM	$DIST:$REL AS mini
 LABEL	maintainer=mlan
 
-ARG	SYSLOG_LEVEL=4
+ENV	DOCKER_RUNSV_DIR=/etc/service \
+	DOCKER_PERSIST_DIR=/srv \
+	DOCKER_BIN_DIR=/usr/local/bin \
+	SYSLOG_OPTIONS='-S -D'
 
 #
 # Copy utility scripts including entrypoint.sh to image
 #
 
-COPY src/ /usr/local/bin/
+COPY	src/*/bin $DOCKER_BIN_DIR/
 
 #
 # Install
@@ -39,7 +42,7 @@ RUN	apk --update add \
 	cyrus-sasl-login \
 	; fi \
 	&& setup-runit.sh \
-	"syslogd -n -O /dev/stdout -l $SYSLOG_LEVEL" \
+	"syslogd -n -O - $SYSLOG_OPTIONS -l 4" \
 	"crond -f -c /etc/crontabs" \
 	"postfix start-fg" \
 	&& mkdir -p /var/mail && chown postfix: /var/mail \
@@ -61,7 +64,7 @@ EXPOSE 25 465 587
 # Rudimentary healthcheck
 #
 
-HEALTHCHECK CMD postfix status || exit 1
+HEALTHCHECK CMD sv status ${DOCKER_RUNSV_DIR}/* && postfix status
 
 #
 # Entrypoint, how container is run

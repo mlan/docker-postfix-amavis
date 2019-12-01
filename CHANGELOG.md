@@ -1,9 +1,20 @@
+# 1.3.4
+
+- Use refactored setup-runit.sh
+- Fixed dumpcert.sh leaking to stdout. Have it write to logger instead.
+- Fixed amavisd-ls script that was broken.
+- Health-check now tests all services.
+- In demo/Makefile added config, web, -diff, mail-mta-apk_list, mail-mta-quarantine_list, mail-mta-debugtools, mail-app-test_lmtp
+
+
 # 1.3.3
+
 - Now generate selfsigned certificate when needed; SMTPD_USE_TLS=yes but no certificates given
 - Hardening submission (port 587 using STARTTLS) by only accepting permit_auth_destination
 - Now also enable smtps (port 465 using implicit TLS)
 
 # 1.3.2
+
 - Now support configuring aliases database using environment variable MAIL_ALIASES
 - New utility script amavisd-ls which lists contents of quarantine
 - Make sure duplicate entries are NOT created with FORCE_CONFIG
@@ -14,10 +25,12 @@
 - Changed test-mail in Makefile so that it connects to postfix smtp service (and not pickup)
 
 # 1.3.1
+
 - Fixed the ACME TLS hook
 - Fixed some minor bugs in demo/Makefile
 
 # 1.3.0
+
 - Simplify registering with razor so that spam signatures can be checked and shared
 - Consolidated build targets into `mini`, `base` and `full`
 - Fixed razor installation
@@ -25,9 +38,11 @@
 - Fixed the ACME TLS hook
 
 # 1.2.1
+
 - Fixed new bug where the ACME TLS hook was not run in persistent setups
 
 # 1.2.0
+
 - Supports SMTP client SASL authentication using Dovecot
 - Support multiple domains
 - Services' configuration and run files now consolidated under /srv
@@ -41,10 +56,13 @@
 - Now install tzdata in target full to allow time zone configuration
 
 # 1.1.1
+
 - Make sure the .env settings are honored also for MYSQL
 
 # 1.1.0
+
 - Demo based on `docker-compose.yml` and `Makefile` files
 
 # 1.0.0
+
 - Using alpine:3.8 due to bug [9987](https://bugs.alpinelinux.org/issues/9987)

@@ -1,12 +1,10 @@
 -include    *.mk .env .init.env
 
-.PHONY: variables ps init up down destroy wait test \
-	auth-up auth-down auth-cmd auth-logs auth-show_conf auth-show_user auth-add_user \
-	mail-mta-up mail-mta-down mail-mta-cmd mail-mta-logs mail-mta-bayes mail-mta-test \
-	mail-db-up mail-db-down mail-db-cmd mail-db-logs mail-db-test \
-	mail-app-up mail-app-down mail-app-cmd mail-app-logs mail-app-debugtools \
-	mail-app-man_server mail-app-man_ldap \
-	mail-app-test mail-app-show_user1 mail-app-show_user2
+_ip       = $(shell docker inspect -f \
+	'{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
+	$(1) | head -n1)
+
+.PHONY:
 
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
@@ -14,7 +12,7 @@ variables:
 ps:
 	docker-compose ps
 
-init: auth-up wait auth-add_user wait mail-db-up wait mail-mta-up wait mail-app-up
+init: auth-up wait_1 auth-add_user mail-db-up mail-mta-up wait_2 mail-app-up
 
 up:
 	docker-compose up -d
@@ -25,8 +23,14 @@ down:
 destroy:
 	docker-compose down -v
 
-wait:
+config:
+	docker-compose config
+
+wait_%:
 	sleep 10
+
+web:
+	firefox localhost:8080 &
 
 test: mail-mta-test
 
@@ -64,15 +68,28 @@ mail-mta-cmd:
 mail-mta-logs:
 	docker container logs $(COMPOSE_PROJECT_NAME)_mail-mta_1
 
+mail-mta-diff:
+	docker container diff $(COMPOSE_PROJECT_NAME)_mail-mta_1
+
 mail-mta-bayes:
 	docker-compose exec mail-mta sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis/.spamassassin && rm -rf bayesian.database'
 
 mail-mta-test:
-	printf "EHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A test message\n\nGreat news! You can receive email.\n.\nQUIT\n" \
+	printf "EHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message\n\nGreat news! You can receive email.\n.\nQUIT\n" \
 	| nc -C localhost 25
 
 mail-mta-razor:
 	docker-compose exec mail-mta conf cntcfg_razor_register
+
+mail-mta-apk_list:
+	docker-compose exec mail-mta /bin/sh -c 'for pkg in $$(apk info 2>/dev/null); do printf "%9s  %s\n" $$(apk info -s $$pkg 2>/dev/null | sed -n "2{p;q}") $$pkg; done | sort'
+
+mail-mta-quarantine_list:
+	docker-compose exec mail-mta amavisd-ls
+
+mail-mta-debugtools:
+	docker-compose exec mail-mta apk --no-cache --update add \
+	nano less lsof htop openldap-clients bind-tools iputils strace
 
 mail-db-up:
 	docker-compose up -d mail-db
@@ -85,6 +102,9 @@ mail-db-cmd:
 
 mail-db-logs:
 	docker container logs $(COMPOSE_PROJECT_NAME)_mail-db_1
+
+mail-db-diff:
+	docker container diff $(COMPOSE_PROJECT_NAME)_mail-db_1
 
 mail-db-test:
 	docker-compose exec mail-db mysqlshow -u $(MYSQL_USER) $(MYSQL_DATABASE) -p$(MYSQL_PASSWORD)
@@ -101,10 +121,16 @@ mail-app-cmd:
 mail-app-logs:
 	docker container logs $(COMPOSE_PROJECT_NAME)_mail-app_1
 
+mail-app-diff:
+	docker container diff $(COMPOSE_PROJECT_NAME)_mail-app_1
+
 mail-app-debugtools:
-	docker-compose exec mail-app apt-get update 
+	docker-compose exec mail-app apt-get update
 	docker-compose exec mail-app apt-get install --yes \
-	less nano ldap-utils htop net-tools lsof iputils-ping
+	less nano ldap-utils htop net-tools lsof iputils-ping strace
+
+mail-app-htop: mail-app-debugtools
+	docker-compose exec mail-app htop
 
 mail-app-man_server:
 	docker-compose exec mail-app man kopano-server.cfg
@@ -112,7 +138,10 @@ mail-app-man_server:
 mail-app-man_ldap:
 	docker-compose exec mail-app man kopano-ldap.cfg
 
-mail-app-test: mail-mta-test
+mail-app-test_smtp: mail-mta-test
+
+mail-app-test_lmtp:
+	printf "LHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A LMTP test message from me to you\n\nDelete me, please \n.\nQUIT\n" | nc -C $(call _ip,$(COMPOSE_PROJECT_NAME)_mail-app_1) 2003
 
 mail-app-show_user1: 
 	docker-compose exec mail-app kopano-admin -l

@@ -19,16 +19,19 @@ qlist=$(for mail in $mails; do
 	head_cat=$(echo "$headers" | sed -rn 's/^Delivered-To: (.*)-quarantine/\1/p')
 	head_from=$(echo "$headers" | sed -rn 's/^X-Envelope-From: <(.*)>/\1/p')
 	head_x_to=$(echo "$headers" | sed -rn 's/^X-Envelope-To: <(.*)>/\1/p')
-	head_h_to=$(echo "$head_h_to" | sed -rn 's/^To: (.*)/\1/p')
-	head_to=$(echo "$headers" | sed 's/.* //g' | sed 's/<*>*//g' | sed s/@${mydomain- }//g)
+	head_h_to=$(echo "$headers" | sed -rn 's/^To: (.*)/\1/p')
+	head_to=$(echo "$head_h_to" | sed 's/.* //g' | sed 's/<*>*//g' | sed 's/@'${mydomain- }'//g')
 	head_id=$(echo "$headers" | sed -rn 's/^X-Quarantine-ID: <(.*)>/\1/p')
 	head_alert=$(echo "$headers" | sed -rn 's/^X-Amavis-Alert: (.*)/\1/p')
 	head_score=$(echo "$headers" | sed -rn 's/^X-Spam-Score: (.*)/\1/p')
 	head_h_date=$(echo "$headers" | sed -rn 's/^Date: (.*)/\1/p')
-	head_date=$(echo "$head_h_date" | sed -rn 's/([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+).*/\4-\3-\2 \5/p')
-	printf "%s\t%s\t%s\t%s\n" $head_id $head_cat $head_date $head_to $head_from
+	head_date=$(echo "$head_h_date" | sed -rn 's/([^ ]+)[ ]+([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+) ([^ ]+).*/\4-\3-\2/p')
+
+	printf "%-12s %-12s %-12s %-18s %-18s\n" \
+		"$head_id" "$head_cat" "$head_date" "$head_to" "$head_from"
 done)
 
-printf "\n%s\t%s\t%s\t%s\t%s\n" QUARANTINE-ID THREAT ENVELOPE-RECEIVED-DATE ORIGINAL-TO ENVELOPE-FROM
+printf "\n%-12s %-12s %-12s %-18s %-18s\n" \
+	QUAR-ID THREAT ENV-DATE ORIG-TO ENV-FROM
 echo "$qlist"
 echo

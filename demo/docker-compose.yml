@@ -1,4 +1,4 @@
-version: '3.7'
+version: '3'
 
 services:
   mail-app:
@@ -13,7 +13,7 @@ services:
       - mail-mta
     environment:
       - USER_PLUGIN=ldap
-      - LDAP_HOST=auth
+      - LDAP_URI=ldap://auth:389/
       - MYSQL_HOST=mail-db
       - SMTP_SERVER=mail-mta
       - LDAP_SEARCH_BASE=${LDAP_BASE-dc=example,dc=com}
@@ -22,11 +22,13 @@ services:
       - MYSQL_DATABASE=${MYSQL_DATABASE-kopano}
       - MYSQL_USER=${MYSQL_USER-kopano}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
-      - SYSLOG_LEVEL=3
+      - SYSLOG_LEVEL=${SYSLOG_LEVEL-3}
     volumes:
       - mail-conf:/etc/kopano
       - mail-atch:/var/lib/kopano/attachments
       - mail-sync:/var/lib/z-push
+    cap_add: # helps debugging by alowing strace
+      - sys_ptrace
 
   mail-mta:
     image: mlan/postfix-amavis
@@ -54,6 +56,8 @@ services:
       - RAZOR_REGISTRATION=${RAZOR_REGISTRATION-}
     volumes:
       - mail-mta:/srv
+    cap_add: # helps debugging by alowing strace
+      - sys_ptrace
 
   mail-db:
     image: mariadb
