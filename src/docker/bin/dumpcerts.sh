@@ -59,7 +59,7 @@ case "$(uname)" in
 esac
 
 inform() {
-	local script=$0
+	local script=$(basename $0)
 	local level=$1
 	shift
 	if [ -t 1 ]; then
@@ -69,9 +69,9 @@ inform() {
 		esac
 	else
 		if command -v logger >/dev/null; then
-			logger -t "$script[$$]" -p "auth.$level" "$@"
+			logger -t "${script}[${$}]" -p "auth.$level" "$@"
 		else
-			echo "$script[$$]: $@"
+			echo "${script}[${$}]: $@"
 		fi
 	fi
 }
@@ -169,7 +169,7 @@ printf -- \
 domains=$(jq -r '.Certificates[].Domain.Main' ${acmefile}) || bad_acme
 
 inform notice "Extracting private keys and cert bundles in ${acmefile}"
-inform debug  "Extracting private key and cert bundle for domains ${domains}"
+inform debug  "Extracting private key and cert bundle for domains" ${domains}
 
 for domain in $domains; do
 	# Traefik stores a cert bundle for each domain.  Within this cert
