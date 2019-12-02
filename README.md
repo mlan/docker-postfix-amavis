@@ -27,7 +27,7 @@ Feature list follows below
 - Multi-staged build providing the images `mini`, `base` and `full`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
-- Built in utility script `amavisd-ls` which lists contents of quarantine
+- Built in utility script `amavisd-ls` which lists the contents of quarantine
 - Built in utility script `conf` helping configuring Postfix, AMaViS, SpamAssassin, Razor, ClamAV and Dovecot
 - Makefile which can build images and do some management and testing
 - Health check
@@ -194,7 +194,7 @@ To configure the Postfix SMTP client connecting using the legacy SMTPS protocol 
 
 ## Incoming SMTPS and submission client authentication
 
-Postfix achieves client authentication using Dovecot. Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the `SMTP_RELAY_HOSTAUTH`. Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587. To avoid the risk of being an open relay the SMTPS and submission services are only activated when `SMTPD_SASL_CLIENTAUTH` is set. Additionally clients are required to authenticate using TLS to avoid password being sent in the clear. The configuration of the services are the similar with the exception that the SMTPS service uses the legacy SMTPS protocol; `SMTPD_TLS_WRAPPERMODE=yes`, whereas the submission service uses the STARTTLS protocol.
+Postfix achieves client authentication using Dovecot. Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the `SMTP_RELAY_HOSTAUTH`. Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587. To avoid the risk of being an open relay the SMTPS and submission services are only activated when `SMTPD_SASL_CLIENTAUTH` is set. Additionally clients are required to authenticate using TLS to avoid password being sent in the clear. The configuration of the services are the similar with the exception that the SMTPS service uses the legacy SMTPS protocol; `SMTPD_TLS_WRAPPERMODE=yes`, whereas the submission service uses the STARTTLS protocol.
 
 #### `SMTPD_SASL_CLIENTAUTH`
 
@@ -230,7 +230,7 @@ If `SMTPD_USE_TLS=yes` is explicitly defined but there are no certificate files 
 
 #### `SMTPD_TLS_CERT_FILE`
 
-Specifies the [RSA](https://en.wikipedia.org/wiki/RSA_(cryptosystem)) [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) certificate file within the container to be used with incoming TLS connections. The certificate file need to be made available in the container by some means. Example `SMTPD_TLS_CERT_FILE=cert.pem`. Additionally there are the [DSA](https://en.wikipedia.org/wiki/Digital_Signature_Algorithm), [ECDSA](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) or chain counterparts; `SMTPD_TLS_DCERT_FILE`, `SMTPD_TLS_ECCERT_FILE` and `SMTPD_TLS_CHAIN_FILES`.
+Specifies the [RSA](https://en.wikipedia.org/wiki/RSA_(cryptosystem)) [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) certificate file within the container to be used with incoming TLS connections. The certificate file need to be made available in the container by some means. Example `SMTPD_TLS_CERT_FILE=cert.pem`. Additionally there are the [DSA](https://en.wikipedia.org/wiki/Digital_Signature_Algorithm), [ECDSA](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) or chain counterparts; `SMTPD_TLS_DCERT_FILE`, `SMTPD_TLS_ECCERT_FILE` and `SMTPD_TLS_CHAIN_FILES`.
 
 #### `SMTPD_TLS_KEY_FILE`
 
@@ -292,6 +292,29 @@ Razor, called by SpamAssassin, will check if the signature of the received email
 
 To register an identity with the Razor server, use `RAZOR_REGISTRATION`. You can request to be know as a certain user name, `RAZOR_REGISTRATION=username:passwd`. If you omit both user name and password, e.g., `RAZOR_REGISTRATION=:`, they will both be assigned to you by the Razor server. Likewise if password is omitted a password will be assigned by the Razor server. Razor users are encouraged
 to use their email addresses as their user name. Example: `RAZOR_REGISTRATION=postmaster@example.com:secret`
+
+### Managing the quarantine
+
+A message is quarantined by being saved in the directory `/var/amavis/quarantine/` allowing manual inspection to determine weather or not to release it. The utility `amavisd-ls` allow some simple inspection of what is in the quarantine. To do so type:
+
+```bash
+docker-compose exec mail-mta amavisd-ls
+```
+
+A quarantined message receives one additional header field: an
+X-Envelope-To-Blocked. An X-Envelope-To still holds a complete list
+of envelope recipients, but the X-Envelope-To-Blocked only lists its
+subset (in the same order), where only those recipients are listed
+which did not receive a message (e.g. being blocked by virus/spam/
+banning... rules). This facilitates a release of a multi-recipient
+message from a quarantine in case where some recipients had a message
+delivered (e.g. spam lovers) and some had it blocked.
+
+To release a quarantined message type:
+
+```bash
+docker-compose exec mail-mta amavisd-release <file>
+```
 
 ## Incoming SPF sender authentication
 

@@ -3,6 +3,7 @@
 - Use refactored setup-runit.sh
 - Fixed dumpcert.sh leaking to stdout. Have it write to logger instead.
 - Fixed amavisd-ls script that was broken.
+- Added section "Managing the quarantine" in README.md
 - Health-check now tests all services.
 - In demo/Makefile added config, web, -diff, mail-mta-apk_list, mail-mta-quarantine_list, mail-mta-debugtools, mail-app-test_lmtp
 
