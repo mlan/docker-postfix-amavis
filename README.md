@@ -1,6 +1,7 @@
 # The `mlan/postfix-amavis` repository
 
 ![travis-ci test](https://img.shields.io/travis/mlan/docker-postfix-amavis.svg?label=build&style=popout-square&logo=travis)
+![docker build](https://img.shields.io/docker/cloud/build/mlan/postfix-amavis.svg?label=build&style=popout-square&logo=docker)
 ![image size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
 ![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=popout-square&logo=docker)
 ![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=popout-square&logo=docker)
@@ -60,7 +61,7 @@ docker run -d --name mail-mta --hostname mx1.example.com -e MAIL_BOXES="info@exa
 An example of how to configure an web mail server using docker compose is given below. It defines 4 services, `mail-app`, `mail-mta`, `mail-db` and `auth`, which are the web mail server, the mail transfer agent, the SQL database and LDAP authentication respectively.
 
 ```yaml
-version: '3.7'
+version: '3'
 
 services:
   mail-app:
@@ -75,7 +76,7 @@ services:
       - mail-mta
     environment:
       - USER_PLUGIN=ldap
-      - LDAP_HOST=auth
+      - LDAP_URI=ldap://auth:389/
       - MYSQL_HOST=mail-db
       - SMTP_SERVER=mail-mta
       - LDAP_SEARCH_BASE=${LDAP_BASE-dc=example,dc=com}
