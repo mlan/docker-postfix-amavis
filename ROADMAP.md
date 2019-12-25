@@ -15,17 +15,18 @@ Accommodate IMAP and POP3 configuration via environment variables in build targe
 
 ## OpenDMARC
 
-Consider installing opendmarc once it is available in alpine:3.11.
-Include in build target `full` in Dockerfile
+Consider installing opendmarc once it is available in alpine/main (now in testing).
+Include in build target `full` in Dockerfile.
 Add configuration function in entrypoint.sh
 
 ## Pyzor
 
-Consider installing pyzor once it is available in alpine:3.11
-Include in build target `full` in Dockerfile
+Consider installing pyzor once it is available in alpine/main (now in testing).
+Include in build target `full` in Dockerfile.
 Add configuration function in entrypoint.sh
 
 ## Amavisd optimization
+
 Lets see if we can optimize the amavisd parameters so that we can improve
 its throughput using ideas in [amavisd-new, advanced configuration and management](https://www.ijs.si/software/amavisd/amavisd-new-magdeburg-20050519.pdf)
 
@@ -38,7 +39,9 @@ its throughput using ideas in [amavisd-new, advanced configuration and managemen
 [Explanation of Amavisd SQL database](https://docs.iredmail.org/amavisd.sql.db.html)
 
 #### MySQL Database
+
 Create an user and a database for quarantine storage :
+
 ```bash
 # mysql -u root -p
 mysql> CREATE DATABASE amavis_storage;
@@ -56,7 +59,9 @@ mysql> DROP TABLE mailaddr;
 mysql> DROP TABLE policy;
 mysql> DROP TABLE wblist;
 ```
+
 #### amavisd.conf
+
 ```bash
 @storage_sql_dsn = ( ['DBI:mysql:database=amavis_storage;host=127.0.0.1;port=3306', 'amavis_storage', 'xxxx'] );  # none, same, or separate database
 
@@ -76,4 +81,3 @@ $bad_header_quarantine_method = 'sql:';
 # You can set it to 1 (the default) to test if Amavis is filling correctly the tables maddr, msgs, and msgcrpt
 $sql_store_info_for_all_msgs = 0;
 ```
-
