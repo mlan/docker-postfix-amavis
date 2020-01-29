@@ -1,3 +1,9 @@
+# 1.3.6
+
+- [demo](demo) Use host timezone by mounting /etc/localtime.
+- [docker](src/docker/bin/entrypoint.sh) Always run `sa-update` at container start, otherwise amavisd refuses to start with new versions.
+- [docker](Dockerfile) Don't install tzdata, instead mount host's /etc/localtime.
+
 # 1.3.5
 
 - Now use alpine:3.11.
@@ -24,7 +30,7 @@
 - New utility script amavisd-ls which lists contents of quarantine.
 - Make sure duplicate entries are NOT created with FORCE_CONFIG.
 - Use default value if MAIL_DOMAIN is empty and HOSTNAME is not FQDC.
-- New behaviour; DKIM_SELECTOR must be non empty for DKIM to be configured.
+- New behavior; DKIM_SELECTOR must be non empty for DKIM to be configured.
 - Now use [Multiple cleanup service architecture](https://amavis.org/README.postfix.html#d0e1038).
 - Added smoke test.
 - Changed test-mail in Makefile so that it connects to postfix smtp service (and not pickup).

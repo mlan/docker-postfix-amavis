@@ -27,6 +27,7 @@ services:
       - mail-conf:/etc/kopano
       - mail-atch:/var/lib/kopano/attachments
       - mail-sync:/var/lib/z-push
+      - /etc/localtime:/etc/localtime:ro    # Use host timezone
     cap_add: # helps debugging by alowing strace
       - sys_ptrace
 
@@ -56,6 +57,7 @@ services:
       - RAZOR_REGISTRATION=${RAZOR_REGISTRATION-}
     volumes:
       - mail-mta:/srv
+      - /etc/localtime:/etc/localtime:ro    # Use host timezone
     cap_add: # helps debugging by alowing strace
       - sys_ptrace
 
@@ -72,6 +74,7 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
     volumes:
       - mail-db:/var/lib/mysql
+      - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
   auth:
     image: mlan/openldap
@@ -81,6 +84,7 @@ services:
       - LDAP_LOGLEVEL=parse
     volumes:
       - auth-db:/srv
+      - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
 networks:
   backend:

@@ -90,6 +90,7 @@ services:
       - mail-conf:/etc/kopano
       - mail-atch:/var/lib/kopano/attachments
       - mail-sync:/var/lib/z-push
+      - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
   mail-mta:
     image: mlan/postfix-amavis
@@ -107,6 +108,7 @@ services:
       - LDAP_QUERY_FILTER_USER=(&(objectclass=${LDAP_USEROBJ-posixAccount})(mail=%s))
     volumes:
       - mail-mta:/srv
+      - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
   mail-db:
     image: mariadb
@@ -121,6 +123,7 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
     volumes:
       - mail-db:/var/lib/mysql
+      - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
   auth:
     image: mlan/openldap
@@ -130,6 +133,7 @@ services:
       - LDAP_LOGLEVEL=parse
     volumes:
       - auth-db:/srv
+      - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
 networks:
   backend:

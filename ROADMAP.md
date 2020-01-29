@@ -1,36 +1,40 @@
 # Road map
 
-## amavisd-ls
+## High priority
 
-Perhaps, implement something more interactive using dialog?
-
-## Docker config lock
+### Docker config lock
 
 Revisit the config lock. Now we depend on a single file. Feels unsafe.
 Perhaps we can rely on the conf dir being empty as an indicator?
 
-## Dovecot IMAP and POP3
+## Low priority
+
+### amavisd-ls
+
+Perhaps, implement something more interactive using dialog?
+
+### Dovecot IMAP and POP3
 
 Accommodate IMAP and POP3 configuration via environment variables in build target `base`
 
-## OpenDMARC
+### OpenDMARC
 
 Consider installing opendmarc once it is available in alpine/main (now in testing).
 Include in build target `full` in Dockerfile.
 Add configuration function in entrypoint.sh
 
-## Pyzor
+### Pyzor
 
 Consider installing pyzor once it is available in alpine/main (now in testing).
 Include in build target `full` in Dockerfile.
 Add configuration function in entrypoint.sh
 
-## Amavisd optimization
+### Amavisd optimization
 
 Lets see if we can optimize the amavisd parameters so that we can improve
 its throughput using ideas in [amavisd-new, advanced configuration and management](https://www.ijs.si/software/amavisd/amavisd-new-magdeburg-20050519.pdf)
 
-## Amavisd MySQL Quarantine
+### Amavisd MySQL Quarantine
 
 #### References
 

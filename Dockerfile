@@ -16,7 +16,8 @@ LABEL	maintainer=mlan
 ENV	DOCKER_RUNSV_DIR=/etc/service \
 	DOCKER_PERSIST_DIR=/srv \
 	DOCKER_BIN_DIR=/usr/local/bin \
-	SYSLOG_OPTIONS='-S -D'
+	SYSLOG_LEVEL=4 \
+	SYSLOG_OPTIONS=-SDt
 
 #
 # Copy utility scripts including entrypoint.sh to image
@@ -42,7 +43,7 @@ RUN	apk --update add \
 	cyrus-sasl-login \
 	; fi \
 	&& setup-runit.sh \
-	"syslogd -n -O - $SYSLOG_OPTIONS -l 4" \
+	"syslogd -nO- -l$SYSLOG_LEVEL $SYSLOG_OPTIONS" \
 	"crond -f -c /etc/crontabs" \
 	"postfix start-fg" \
 	&& mkdir -p /var/mail && chown postfix: /var/mail \
@@ -132,7 +133,6 @@ RUN	apk --no-cache --update add \
 	unrar \
 	p7zip \
 	ncurses \
-	tzdata \
 	&& setup-runit.sh \
 	"amavisd foreground" \
 	"freshclam -d --quiet" \

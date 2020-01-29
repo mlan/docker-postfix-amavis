@@ -395,7 +395,6 @@ cntrun_cfgall() {
 		cntcfg_postfix_generate_tls_cert
 		cntcfg_postfix_activate_tls_cert
 		cntcfg_postfix_apply_envvars
-		cntcfg_spamassassin_update
 		cntcfg_razor_register
 		lock_config
 	else
@@ -711,15 +710,6 @@ cntcfg_amavis_apply_envvars() {
 	fi
 }
 
-cntcfg_spamassassin_update() {
-	# Download rules for spamassassin at start up.
-	# There is also an daily cron job that updates these.
-	if _is_installed spamassassin; then
-		scr_info 0 "Updating spamassassin rules"
-		( sa-update ) &
-	fi
-}
-
 cntcfg_razor_register() {
 	local auth="${1-$RAZOR_REGISTRATION}"
 	auth=${auth//:/ }
@@ -745,6 +735,10 @@ cntcfg_razor_register() {
 	fi
 }
 
+#
+# run time utility commands
+#
+
 cntrun_chown_home() {
 	# do we need to check  /var/amavis/.spamassassin/bayes_journal?
 	_chowncond $postfix_runas $postfix_home
@@ -760,22 +754,27 @@ cntrun_prune_pidfiles() {
 	done
 }
 
-#
-# run time utility commands
-#
-
-doveadm_pw() { doveadm pw -p $1 ;}
-
-update_loglevel() {
+cntrun_loglevel_update() {
 	local loglevel=${1-$SYSLOG_LEVEL}
 	if [ -n "$loglevel" ]; then
 		scr_info 0 "Setting syslogd level = $loglevel"
-		setup-runit.sh "syslogd -n -O - $SYSLOG_OPTIONS -l $loglevel"
+		setup-runit.sh "syslogd -nO- -l$loglevel $SYSLOG_OPTIONS"
 	fi
 	if [ "$calledformcli" = true ]; then
 		sv restart syslogd
 	fi
 }
+
+cntrun_spamassassin_update() {
+	# Download rules for spamassassin at start up.
+	# There is also an daily cron job that updates these.
+	if _is_installed spamassassin; then
+		scr_info 0 "Updating spamassassin rules"
+		( sa-update ) &
+	fi
+}
+
+doveadm_pw() { doveadm pw -p $1 ;}
 
 update_postfix_dhparam() {
 	# Optionally generate non-default Postfix SMTP server EDH parameters for improved security
@@ -824,7 +823,8 @@ cntrun_cli_and_exit "$@"
 #cntrun_chown_home
 cntrun_prune_pidfiles
 cntrun_cfgall
-update_loglevel
+cntrun_loglevel_update
+cntrun_spamassassin_update
 
 #
 # start services

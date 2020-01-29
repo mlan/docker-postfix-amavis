@@ -12,7 +12,7 @@ variables:
 ps:
 	docker-compose ps
 
-init: auth-up wait_1 auth-mod_index auth-add_user mail-db-up mail-mta-up wait_2 mail-app-up
+init: auth-up wait_11 auth-mod_index auth-add_user mail-db-up mail-mta-up wait_12 mail-app-up wait_23 mail-app-create_store
 
 up:
 	docker-compose up -d
@@ -27,7 +27,7 @@ config:
 	docker-compose config
 
 wait_%:
-	sleep 10
+	sleep $*
 
 web:
 	firefox localhost:8080 &
@@ -152,3 +152,6 @@ mail-app-show_user1:
 
 mail-app-show_user2: mail-app-debugtools
 	docker-compose exec mail-app ldapsearch -H ldap://auth:389 -xLLL -b $(LDAP_BASE) '*'
+
+mail-app-create_store:
+	docker-compose exec mail-app kopano-admin --create-store $(LDAP_TEST_USER)

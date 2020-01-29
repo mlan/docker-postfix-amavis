@@ -32,8 +32,7 @@ TST_SLOG ?= 4
 TST_ALOG ?= 5
 TST_SBUG ?= 0
 TST_STAG ?= -99
-TST_TZ   ?= UTC
-TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) -e TZ=$(TST_TZ) \
+TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) \
 		-e SA_TAG_LEVEL_DEFLT=$(TST_STAG) -e SA_DEBUG=$(TST_SBUG) -e LOG_LEVEL=$(TST_ALOG)
 TST_MSG  ?= ---test-message---
 TST_KEY  ?= tmp/local_priv_key.pem
@@ -379,7 +378,3 @@ test-status-bayes:
 	| sed -r 's/[^ ]+\s+[^ ]+\s+([^ ]+).*non-token data: (.*)/\1\@\2/g' \
 	| sed -r '/atime/s/(.*)@(.*)/echo $$(date --date=@\1 +%Y%b%d-%T)@\2/eg' \
 	| column -t -s @
-
-test-timezone-srv:
-	docker cp /usr/share/zoneinfo/$(TST_TZ) $(TST_SRV):/etc/localtime
-	docker exec -it $(TST_SRV) sh -c 'echo $(TST_TZ) > /etc/timezone'
