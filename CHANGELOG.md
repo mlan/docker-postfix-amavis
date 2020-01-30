@@ -3,6 +3,7 @@
 - [demo](demo) Use host timezone by mounting /etc/localtime.
 - [docker](src/docker/bin/entrypoint.sh) Always run `sa-update` at container start, otherwise amavisd refuses to start with new versions.
 - [docker](Dockerfile) Don't install tzdata, instead mount host's /etc/localtime.
+- [docker](ROADMAP.md) Config lock studied.
 
 # 1.3.5
 

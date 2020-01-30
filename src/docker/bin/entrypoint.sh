@@ -372,10 +372,19 @@ _cond_append() {
 }
 
 lock_config() {
+	local lock_str=$(cat <<-!cat
+		$(date) $(basename $0):
+
+		%s configuration completed.
+
+		Don't remove this file, it prevents the configuration from
+		being overwritten on container restart!
+		!cat
+		)
 	if [ -z "$FORCE_CONFIG" ]; then
-		echo "$(date) $(basename $0): Virgin config completed" > "$docker_config_lock"
+		printf "$lock_str" "Virgin" > "$docker_config_lock"
 	else
-		echo "$(date) $(basename $0): Forced config completed" > "$docker_config_lock"
+		printf "$lock_str" "Forced" > "$docker_config_lock"
 	fi
 }
 

@@ -1,13 +1,24 @@
 # Road map
 
-## High priority
-
 ### Docker config lock
 
 Revisit the config lock. Now we depend on a single file. Feels unsafe.
 Perhaps we can rely on the conf dir being empty as an indicator?
 
-## Low priority
+#### Things to consider:
+
+There are more the one config directory;
+- /etc/amavis/
+- /etc/clamav/
+- /etc/dovecot/
+- /etc/postfix/
+- /etc/ssl/
+
+The config directories of the image are not empty.
+During both build and startup, config files backed up, with suffix .dist and .bld,
+which could be used to determine config state?
+
+Perhaps we just keep the config lock the way it is?
 
 ### amavisd-ls
 
