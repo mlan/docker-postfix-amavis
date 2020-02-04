@@ -1,3 +1,10 @@
+# 1.3.7
+
+- [docker](src/docker/bin/entrypoint.sh) Added spamd-spam/ham service uses sa-learn for spam or ham.
+- [docker](src/docker/bin/docker-common.sh) Consolidated logging functionality.
+- [repo](src) separate source code in by which service it belongs to.
+- [demo](demo) Activated kopano-spamd integration.
+
 # 1.3.6
 
 - [demo](demo) Use host timezone by mounting /etc/localtime.

@@ -12,7 +12,7 @@ variables:
 ps:
 	docker-compose ps
 
-init: auth-up wait_11 auth-mod_index auth-add_user mail-db-up mail-mta-up wait_12 mail-app-up wait_23 mail-app-create_store
+init: auth-up wait_11 auth-mod_index auth-add_user mail-db-up mail-mta-up mail-app-up wait_93 mail-app-create_store
 
 up:
 	docker-compose up -d
@@ -25,6 +25,9 @@ destroy:
 
 config:
 	docker-compose config
+
+logs:
+	docker-compose logs --tail 10
 
 wait_%:
 	sleep $*
@@ -90,6 +93,9 @@ mail-mta-apk_list:
 
 mail-mta-quarantine_list:
 	docker-compose exec mail-mta amavisd-ls
+
+mail-mta-freshclam_nodns:
+	docker-compose exec mail-mta freshclam --no-dns
 
 mail-mta-debugtools:
 	docker-compose exec mail-mta apk --no-cache --update add \

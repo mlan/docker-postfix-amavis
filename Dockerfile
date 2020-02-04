@@ -16,7 +16,7 @@ LABEL	maintainer=mlan
 ENV	DOCKER_RUNSV_DIR=/etc/service \
 	DOCKER_PERSIST_DIR=/srv \
 	DOCKER_BIN_DIR=/usr/local/bin \
-	SYSLOG_LEVEL=4 \
+	SYSLOG_LEVEL=5 \
 	SYSLOG_OPTIONS=-SDt
 
 #

@@ -27,6 +27,7 @@ services:
       - mail-conf:/etc/kopano
       - mail-atch:/var/lib/kopano/attachments
       - mail-sync:/var/lib/z-push
+      - mail-spam:/var/lib/kopano/spamd     # kopano-spamd integration
       - /etc/localtime:/etc/localtime:ro    # Use host timezone
     cap_add: # helps debugging by alowing strace
       - sys_ptrace
@@ -57,6 +58,7 @@ services:
       - RAZOR_REGISTRATION=${RAZOR_REGISTRATION-}
     volumes:
       - mail-mta:/srv
+      - mail-spam:/var/lib/kopano/spamd     # kopano-spamd integration
       - /etc/localtime:/etc/localtime:ro    # Use host timezone
     cap_add: # helps debugging by alowing strace
       - sys_ptrace
@@ -95,4 +97,5 @@ volumes:
   mail-atch:
   mail-db:
   mail-mta:
+  mail-spam:
   mail-sync:

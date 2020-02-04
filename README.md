@@ -2,7 +2,7 @@
 
 ![travis-ci test](https://img.shields.io/travis/mlan/docker-postfix-amavis.svg?label=build&style=popout-square&logo=travis)
 ![docker build](https://img.shields.io/docker/cloud/build/mlan/postfix-amavis.svg?label=build&style=popout-square&logo=docker)
-![image size](https://img.shields.io/microbadger/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
+![image size](https://img.shields.io/docker/image-size/mlan/postfix-amavis.svg?label=size&style=popout-square&logo=docker)
 ![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=popout-square&logo=docker)
 ![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=popout-square&logo=docker)
 
@@ -25,6 +25,7 @@ Feature list follows below
 - Simplified configuration of [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail) keys using environment variables
 - Simplified configuration of SMTP [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) using environment variables
 - Simplified generation of Diffie-Hellman parameters needed for [EDH](https://en.wikipedia.org/wiki/Diffie–Hellman_key_exchange) using utility script
+- [Kopano-spamd](https://kb.kopano.io/display/WIKI/Kopano-spamd) integration with [mlan/kopano](https://github.com/mlan/docker-kopano)
 - Multi-staged build providing the images `mini`, `base` and `full`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
@@ -85,11 +86,12 @@ services:
       - MYSQL_DATABASE=${MYSQL_DATABASE-kopano}
       - MYSQL_USER=${MYSQL_USER-kopano}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
-      - SYSLOG_LEVEL=3
+      - SYSLOG_LEVEL=${SYSLOG_LEVEL-3}
     volumes:
       - mail-conf:/etc/kopano
       - mail-atch:/var/lib/kopano/attachments
       - mail-sync:/var/lib/z-push
+      - mail-spam:/var/lib/kopano/spamd     # kopano-spamd integration
       - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
   mail-mta:
@@ -108,6 +110,7 @@ services:
       - LDAP_QUERY_FILTER_USER=(&(objectclass=${LDAP_USEROBJ-posixAccount})(mail=%s))
     volumes:
       - mail-mta:/srv
+      - mail-spam:/var/lib/kopano/spamd     # kopano-spamd integration
       - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
   mail-db:
@@ -144,16 +147,17 @@ volumes:
   mail-atch:
   mail-db:
   mail-mta:
+  mail-spam:
   mail-sync:
 ```
 
-This repository contains a `demo` directory which hold the `docker-compose.yml` file as well as a `Makefile` which might come handy. From within the `demo` directory you can start the container simply by typing:
+This repository contains a [demo](demo) directory which hold the [docker-compose.yml](demo/docker-compose.yml) file as well as a [Makefile](demo/Makefile) which might come handy. From within the [demo](demo) directory you can start the containers by typing:
 
 ```bash
 make init
 ```
 
-Once you have given the container some time to start up you can assess WebApp on the URL [`http://localhost:8080`](http://localhost:8080) and log in with the user name `demo` and password `demo` . You can send a test email by typing:
+Then you can assess WebApp on the URL [`http://localhost:8080`](http://localhost:8080) and log in with the user name `demo` and password `demo` . You can send yourself a test email by typing:
 
 ```bash
 make test
@@ -321,6 +325,19 @@ To release a quarantined message type:
 docker-compose exec mail-mta amavisd-release <file>
 ```
 
+## Kopano-spamd integration with [mlan/kopano](https://github.com/mlan/docker-kopano)
+
+[Kopano-spamd](https://kb.kopano.io/display/WIKI/Kopano-spamd) allow users to
+drag messages into the Junk folder triggering the anti-spam filter to learn it as spam. If the user moves the message back to the inbox,
+the anti-spam filter will unlearn it.
+
+To allow kopano-spamd integration the kopano and postfix-amavis containers need to
+share the `/var/lib/kopano/spamd` folder. If this directory exists within the
+postfix-amavis container, the spamd-spam and spamd-ham service will be started.
+They will run `sa-learn --spam` or `sa-learn --ham`,
+respectively when a message is placed in either `var/lib/kopano/spamd/spam` or
+`var/lib/kopano/spamd/ham`.
+
 ## Incoming SPF sender authentication
 
 Sender Policy Framework (SPF) is an [email authentication](https://en.wikipedia.org/wiki/Email_authentication) method designed to detect forged sender addresses in emails. SPF allows the receiver to check that an email claiming to come from a specific domain comes from an IP address authorized by that domain's administrators. The list of authorized sending hosts and IP addresses for a domain is published in the [DNS](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions) records for that domain.
@@ -422,10 +439,14 @@ Sometimes want to authenticate SMTP client connecting to the submission port 578
 
 ## Logging `SYSLOG_LEVEL`, `LOG_LEVEL`, `SA_DEBUG`
 
-The level of output for logging is in the range from 0 to 8. 1 means emergency logging only, 2 for alert messages, 3 for critical messages only, 4 for error or worse, 5 for warning or worse, 6 for notice or worse, 7 for info or worse, 8 debug. Default: `SYSLOG_LEVEL=4`
+The level of output for logging is in the range from 0 to 7. The default is: `SYSLOG_LEVEL=5`
+
+| emerg | alert | crit | err  | warning | notice | info | debug |
+| ----- | ----- | ---- | ---- | ------- | ------ | ---- | ----- |
+| 0     | 1     | 2    | 3    | 4       | **5**  | 6    | 7     |
 
 Separately, `LOG_LEVEL` and `SA_DEBUG` control the logging level of amavisd-new and spamassasin respectively.
-`LOG_LEVEL` takes valued from 0 to 5 and `SA_DEBUG` is either 1 (activated) or 0 (deactivated). Note that these messages will only appear in the log if `SYSLOG_LEVEL` is 7 or greater.
+`LOG_LEVEL` takes valued from 0 to 5 and `SA_DEBUG` is either 1 (activated) or 0 (deactivated). Note that these messages will only appear in the log if `SYSLOG_LEVEL` is 7 (debug).
 
 
 ## DNS records

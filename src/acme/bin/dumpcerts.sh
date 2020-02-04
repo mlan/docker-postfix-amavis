@@ -40,11 +40,12 @@
 ##set -o pipefail
 set -o nounset
 #set -o verbose
+source docker-common.sh
 
 acme_dump_tls_dir=${acme_dump_tls_dir-/etc/ssl/acme}
 acme_dump_json_link=${acme_dump_json_link-$acme_dump_tls_dir/acme.json}
 
-USAGE="$(basename "$0") <path to acme> <destination cert directory>"
+usage() { echo "$(basename $0) <path to acme> <destination cert directory>" ;}
 
 # Platform variations
 case "$(uname)" in
@@ -58,32 +59,14 @@ case "$(uname)" in
 		;;
 esac
 
-inform() {
-	local script=$(basename $0)
-	local level=$1
-	shift
-	if [ -t 1 ]; then
-		echo "$@"
-		case $level in
-			emerg|alert|crit|err|warning) printf "\n${USAGE}" ;;
-		esac
-	else
-		if command -v logger >/dev/null; then
-			logger -t "${script}[${$}]" -p "auth.$level" "$@"
-		else
-			echo "${script}[${$}]: $@"
-		fi
-	fi
-}
-
 # Allow us to exit on a missing jq binary
 exit_jq() {
-	inform warn "You must have the binary jq to use this."
+	dc_log 4 "You must have the binary jq to use this."
 	exit 1
 }
 
 bad_acme() {
-	inform warn "There was a problem parsing your acme.json file."
+	dc_log 4 "There was a problem parsing your acme.json file."
 	exit 2
 }
 
@@ -103,13 +86,13 @@ readonly acmefile="${1-$acme_dump_json_link}"
 readonly certdir="${2-$acme_dump_tls_dir}"
 
 if [ ! -r "${acmefile}" ]; then
-	inform warn "There was a problem reading from (${acmefile}). We need to read this file to explode the JSON bundle... exiting."
+	dc_log 4 "There was a problem reading from (${acmefile}). We need to read this file to explode the JSON bundle... exiting."
 	exit 2
 fi
 
 
 if [ ! -d "${certdir}" ]; then
-	inform warn "Path ${certdir} does not seem to be a directory. We need a directory in which to explode the JSON bundle... exiting."
+	dc_log 4 "Path ${certdir} does not seem to be a directory. We need a directory in which to explode the JSON bundle... exiting."
 	exit 4
 fi
 
@@ -118,7 +101,7 @@ jq=$(command -v jq) || exit_jq
 priv=$(${jq} -e -r '.Account.PrivateKey' "${acmefile}") || bad_acme
 
 if [ ! -n "${priv}" ]; then
-	inform warn "There didn't seem to be a private key in ${acmefile}. Please ensure that there is a key in this file and try again."
+	dc_log 4 "There didn't seem to be a private key in ${acmefile}. Please ensure that there is a key in this file and try again."
 	exit 8
 fi
 
@@ -168,8 +151,8 @@ printf -- \
 # Process the certificates for each of the domains in acme.json
 domains=$(jq -r '.Certificates[].Domain.Main' ${acmefile}) || bad_acme
 
-inform notice "Extracting private keys and cert bundles in ${acmefile}"
-inform debug  "Extracting private key and cert bundle for domains" ${domains}
+dc_log 5 "Extracting private keys and cert bundles in ${acmefile}"
+dc_log 7  "Extracting private key and cert bundle for domains" ${domains}
 
 for domain in $domains; do
 	# Traefik stores a cert bundle for each domain.  Within this cert

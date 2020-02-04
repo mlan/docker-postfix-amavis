@@ -1,4 +1,5 @@
 #!/bin/sh -e
+source docker-common.sh
 
 #
 # config
@@ -35,6 +36,8 @@ acme_dump_tls_dir=${acme_dump_tls_dir-/etc/ssl/acme}
 acme_dump_json_link=${acme_dump_json_link-$acme_dump_tls_dir/acme.json}
 acme_dump_sv_dir=${acme_dump_sv_dir-$DOCKER_RUNSV_DIR/acme}
 ACME_FILE=${ACME_FILE-/acme/acme.json}
+DOCKER_SPAMD_DIR=${DOCKER_SPAMD_DIR-/var/lib/kopano/spamd}
+DOCKER_SPAMD_SV_DIR=${DOCKER_SPAMD_SV_DIR-$DOCKER_RUNSV_DIR/spamd}
 
 #
 # define environment variables
@@ -46,7 +49,7 @@ amavis_var="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BA
 # Usage
 #
 
-scr_usage() { echo "
+usage() { echo "
 USAGE
 	conf COMMAND FILE [command-options]
 
@@ -94,28 +97,6 @@ FILE
 "
 }
 
-cntrun_formats() {
-	name=$(basename $0)
-	f_norm="\e[0m"
-	f_bold="\e[1m"
-	f_red="\e[91m"
-	f_green="\e[92m"
-	f_yellow="\e[93m"
-}
-
-scr_info() {
-	local status=$1
-	shift
-	if ([ "$status" = "-1" ] && [ -n "${VERBOSE+x}" ]); then
-		status="0"
-	fi
-	case $status in
-	0) echo -e "$f_bold${f_green}INFO ($name)${f_norm} $@" ;;
-	1) echo -e "$f_bold${f_yellow}WARN ($name)${f_norm} $@" ;;
-	2) echo -e "$f_bold${f_red}ERROR ($name)${f_norm} $@" && exit ;;
-	esac
-}
-
 #
 # general file manipulation commands, used both during build and run time
 #
@@ -136,7 +117,7 @@ modify() {
 	else
 		rhs="$(_escape $@)"
 	fi
-	scr_info -1 's/.*('"$lhs"'\s*'"$eq"'\s*)[^#]+(.*)/\1'"$rhs"' \2/g' $cfg_file
+	dc_log 7 's/.*('"$lhs"'\s*'"$eq"'\s*)[^#]+(.*)/\1'"$rhs"' \2/g' $cfg_file
 	sed -ri 's/.*('"$lhs"'\s*'"$eq"'\s*)[^#]+(.*)/\1'"$rhs"' \2/g' $cfg_file
 }
 
@@ -144,7 +125,7 @@ replace() {
 	local cfg_file=$1
 	local old="$(_escape $2)"
 	local new="$(_escape $3)"
-	scr_info -1 's/'"$old"'/'"$new"'/g' $cfg_file
+	dc_log 7 's/'"$old"'/'"$new"'/g' $cfg_file
 	sed -i 's/'"$old"'/'"$new"'/g' $cfg_file
 }
 
@@ -152,7 +133,7 @@ addafter() {
 	local cfg_file=$1
 	local startline="$(_escape $2)"
 	local new="$(_escape $3)"
-	scr_info -1 '/'"$startline"'/!{p;d;}; $!N;s/\n\s*$/\n'"$new"'\n/g' $cfg_file
+	dc_log 7 '/'"$startline"'/!{p;d;}; $!N;s/\n\s*$/\n'"$new"'\n/g' $cfg_file
 	sed -i '/'"$startline"'/!{p;d;}; $!N;s/\n\s*$/\n'"$new"'\n/g' $cfg_file
 #	sed -ri '$!N;s/('"$startline"'.*\n)\s*$/\1\n'"$new"'\n/g;x;x' $cfg_file
 #	sed -ri 'N;s/('"$startline"'.*)\n\s*$/\1\n'"$new"'\n/g' $cfg_file
@@ -162,27 +143,27 @@ addafter() {
 comment() {
 	local cfg_file=$1
 	local string="$2"
-	scr_info -1 '/^'"$string"'/s/^/#/g' $cfg_file
+	dc_log 7 '/^'"$string"'/s/^/#/g' $cfg_file
 	sed -i '/^'"$string"'/s/^/#/g' $cfg_file
 }
 
 uncommentsection() {
 	local cfg_file=$1
 	local startline="$(_escape $2)"
-	scr_info -1 '/^'"$startline"'$/,/^\s*$/s/^#*//g' $cfg_file
+	dc_log 7 '/^'"$startline"'$/,/^\s*$/s/^#*//g' $cfg_file
 	sed -i '/^'"$startline"'$/,/^\s*$/s/^#*//g' $cfg_file
 }
 
 removeline() {
 	local cfg_file=$1
 	local string="$2"
-	scr_info -1 '/'"$string"'.*/d' $cfg_file
+	dc_log 7 '/'"$string"'.*/d' $cfg_file
 	sed -i '/'"$string"'.*/d' $cfg_file
 }
 
 uniquelines() {
 	local cfg_file=$1
-	scr_info -1 '$!N; /^(.*)\n\1$/!P; D' $cfg_file
+	dc_log 7 '$!N; /^(.*)\n\1$/!P; D' $cfg_file
 	sed -ri '$!N; /^(.*)\n\1$/!P; D' $cfg_file
 }
 
@@ -191,7 +172,7 @@ _chowncond() {
 	local dir=$2
 	if id $user > /dev/null 2>&1; then
 		if [ -n "$(find $dir ! -user $user -print -exec chown -h $user: {} \;)" ]; then
-			scr_info 0 "Changed owner to $user for some files in $dir"
+			dc_log 5 "Changed owner to $user for some files in $dir"
 		fi
 	fi
 }
@@ -229,7 +210,7 @@ imgcfg_dovecot_passwdfile() {
 
 imgcfg_runit_acme_dump() {
 	if _is_installed jq; then
-		scr_info 0 "Setting up acme-update service"
+		dc_log 5 "Setting up acme-update service"
 		mkdir -p $acme_dump_sv_dir
 		cat <<-!cat > $acme_dump_sv_dir/run
 			#!/bin/sh -e
@@ -248,7 +229,7 @@ imgcfg_runit_acme_dump() {
 imgcfg_amavis_postfix() {
 	# https://amavis.org/README.postfix.html#basics_transport
 	# https://amavis.org/README.postfix.html#d0e1110
-	scr_info 0 "Configuring postfix-amavis"
+	dc_log 5 "Configuring postfix-amavis"
 	postconf -e content_filter=smtp-amavis:[localhost]:10024
 	postconf -M "smtp-amavis/unix=smtp-amavis unix - - n - 2 smtp"
 	postconf -P "smtp-amavis/unix/syslog_name=postfix/amavis"
@@ -301,15 +282,15 @@ imgdir_persist() {
 				local dstdir="${DOCKER_PERSIST_DIR}${srcdir}"
 				local dsthome="$(dirname $dstdir)"
 				if [ ! -d "$dstdir" ]; then
-					scr_info 0 "Moving $srcdir to $dstdir"
+					dc_log 5 "Moving $srcdir to $dstdir"
 					mkdir -p "$dsthome"
 					mv "$srcdir" "$dsthome"
 					ln -sf "$dstdir" "$srcdir"
 				else
-					scr_info 1 "$srcdir already moved to $dstdir"
+					dc_log 4 "$srcdir already moved to $dstdir"
 				fi
 			else
-				scr_info 1 "Cannot find $srcdir"
+				dc_log 4 "Cannot find $srcdir"
 			fi
 		done
 	fi
@@ -357,16 +338,16 @@ _cond_append() {
 	lineesc="$(echo $lineraw | sed 's/[\";/*]/\\&/g')"
 	if [ -e "$filename" ]; then
 		if [ -z "$(sed -n '/'"$lineesc"'/p' $filename)" ]; then
-			scr_info -1 "_cond_append append: $mode $filename $lineraw"
+			dc_log 7 "_cond_append append: $mode $filename $lineraw"
 			case $mode in
 				a) echo "$lineraw" >> $filename;;
 				i) sed -i "$ i\\$lineesc" $filename;;
 			esac
 		else
-			scr_info 1 "Avoiding duplication: $filename $lineraw"
+			dc_log 4 "Avoiding duplication: $filename $lineraw"
 		fi
 	else
-		scr_info -1 "_cond_append create: $mode $filename $lineraw"
+		dc_log 7 "_cond_append create: $mode $filename $lineraw"
 		echo "$lineraw" >> $filename
 	fi
 }
@@ -407,7 +388,7 @@ cntrun_cfgall() {
 		cntcfg_razor_register
 		lock_config
 	else
-		scr_info 0 "Found config lock file, so not touching configuration"
+		dc_log 5 "Found config lock file, so not touching configuration"
 	fi
 }
 
@@ -420,7 +401,7 @@ cntcfg_postfix_smtp_auth_pwfile() {
 	local host=${hostauth% *}
 	local auth=${hostauth#* }
 	if [ -n "$host" ]; then
-		scr_info 0 "Configuring postfix SMTP relay: $host"
+		dc_log 5 "Configuring postfix SMTP relay: $host"
 		postconf -e relayhost=$host
 		if [ -n "$auth" ]; then
 			postconf -e smtp_sasl_auth_enable=yes
@@ -430,7 +411,7 @@ cntcfg_postfix_smtp_auth_pwfile() {
 			postmap hash:$postfix_sasl_passwd
 		fi
 	else
-		scr_info -1 "No SMTP relay defined"
+		dc_log 7 "No SMTP relay defined"
 	fi
 }
 
@@ -438,7 +419,7 @@ cntcfg_dovecot_smtpd_auth_pwfile() {
 	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	# dovecot need to be installed
 	if (_is_installed dovecot && [ -n "$clientauth" ]); then
-		scr_info 0 "Enabling postfix-dovecot client SASL via submission"
+		dc_log 5 "Enabling postfix-dovecot client SASL via submission"
 		# create client passwd file used for autentication
 		for entry in $clientauth; do
 			_cond_append $dovecot_users $entry
@@ -479,7 +460,7 @@ cntcfg_default_domains() {
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	if [ -z "$domains" ]; then
 		export MAIL_DOMAIN=$docker_default_domain
-		scr_info 1 "No MAIL_DOMAIN, non FQDC HOSTNAME, so using $MAIL_DOMAIN"
+		dc_log 4 "No MAIL_DOMAIN, non FQDC HOSTNAME, so using $MAIL_DOMAIN"
 	fi
 }
 
@@ -487,7 +468,7 @@ cntcfg_postfix_domains() {
 	# configure domains if we have recipients
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	if [ -n "$domains" ] && ([ -n "$LDAP_HOST" ] || [ -n "$MAIL_BOXES" ]); then
-		scr_info 0 "Configuring postfix for domains $domains"
+		dc_log 5 "Configuring postfix for domains $domains"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
 			for domain in $domains; do
 				_cond_append $postfix_virt_domain "$domain #domain"
@@ -507,7 +488,7 @@ cntcfg_amavis_domains() {
 	local domain_main=$(echo $domains | sed 's/\s.*//')
 	local domain_extra=$(echo $domains | sed 's/[^ ]* *//' | sed 's/[^ ][^ ]*/"&"/g' | sed 's/ /, /g')
 	if (_is_installed amavisd-new && [ -n "$domain_main" ]); then
-		scr_info 0 "Configuring amavis for domains $domains"
+		dc_log 5 "Configuring amavis for domains $domains"
 		modify $amavis_cf '\$mydomain' = "'"$domain_main"';"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
 			modify $amavis_cf '@local_domains_maps' = '( [".$mydomain", '$domain_extra'] );'
@@ -528,15 +509,15 @@ cntcfg_amavis_dkim() {
 	local txtfile=$dkim_dir/$domain_main.$selector._domainkey.txt
 	local keystring="$DKIM_PRIVATEKEY"
 	if (_is_installed amavisd-new && [ -n "$selector" ] && [ -n "$domain_main" ]); then
-		scr_info 0 "Setting dkim selector and domain to $selector and $domain_main"
+		dc_log 5 "Setting dkim selector and domain to $selector and $domain_main"
 		# insert config statements just before last line
 		_cond_append -i $amavis_cf '@dkim_signature_options_bysender_maps = ( { "." => { ttl => 21*24*3600, c => "relaxed/simple" } } );'
 		_cond_append -i $amavis_cf 'dkim_key("'$domain_main'", "'$selector'", "'$keyfile'");'
 		if [ -n "$keystring" ]; then
 			if [ -e $keyfile ]; then
-				scr_info 1 "Overwriting private dkim key here $keyfile"
+				dc_log 4 "Overwriting private dkim key here $keyfile"
 			else
-				scr_info 0 "Writing private dkim key here $keyfile"
+				dc_log 5 "Writing private dkim key here $keyfile"
 			fi
 			if echo "$keystring" | grep "PRIVATE KEY" - > /dev/null; then
 				echo "$keystring" fold -w 64 > $keyfile
@@ -548,7 +529,7 @@ cntcfg_amavis_dkim() {
 		fi
 		if [ ! -e $keyfile ]; then
 			local message="$(amavisd genrsa $keyfile $bits 2>&1)"
-			scr_info 1 "$message"
+			dc_log 4 "$message"
 			amavisd showkeys $domain_main > $txtfile
 			#amavisd testkeys $domain_main
 		fi
@@ -582,7 +563,7 @@ _cntgen_postfix_ldapmap() {
 
 cntcfg_postfix_mailbox_auth_ldap() {
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ]); then
-		scr_info 0 "Configuring postfix-ldap with ldap-host $LDAP_HOST"
+		dc_log 5 "Configuring postfix-ldap with ldap-host $LDAP_HOST"
 		postconf virtual_mailbox_maps=ldap:$postfix_ldap_users_cf
 		_cntgen_postfix_ldapmap "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_USER" > $postfix_ldap_users_cf
 		if [ -n "$LDAP_QUERY_FILTER_ALIAS" ]; then
@@ -608,7 +589,7 @@ cntcfg_postfix_mailbox_auth_ldap() {
 cntcfg_postfix_mailbox_auth_hash() {
 	local emails="${1-$MAIL_BOXES}"
 	if [ -n "$emails" ]; then
-		scr_info 0 "Configuring postfix-virt-mailboxes"
+		dc_log 5 "Configuring postfix-virt-mailboxes"
 		for email in $emails; do
 			_cond_append $postfix_virt_mailbox $email $email
 		done
@@ -630,7 +611,7 @@ cntcfg_postfix_alias_map() {
 	# MAIL_ALIASES="alias1:target1a,target1b alias2:target2"
 	local aliasmaps="${1-$MAIL_ALIASES}"
 	if [ -n "$aliasmaps" ]; then
-		scr_info 0 "Config. postfix aliases"
+		dc_log 5 "Config. postfix aliases"
 		for aliasmap in $aliasmaps; do
 			_cond_append $postfix_aliases $(echo "$aliasmap" | sed 's/[:,]/& /g')
 		done
@@ -639,7 +620,7 @@ cntcfg_postfix_alias_map() {
 		postalias $postfix_aliases
 		newaliases
 	else
-		scr_info -1 "No postfix aliases defined"
+		dc_log 7 "No postfix aliases defined"
 		postconf alias_maps=
 		postconf alias_database=
 	fi
@@ -651,7 +632,7 @@ cntcfg_acme_postfix_tls_cert() {
 	# cntcfg_postfix_apply_envvars
 	if (_is_installed jq && [ -f $ACME_FILE ]); then
 		HOSTNAME=${HOSTNAME-$(hostname)}
-		scr_info 0 "Configuring acme-tls for host $HOSTNAME"
+		dc_log 5 "Configuring acme-tls for host $HOSTNAME"
 		ln -sf $ACME_FILE $acme_dump_json_link
 		ACME_TLS_CERT_FILE=$acme_dump_tls_dir/certs/${HOSTNAME}.crt
 		ACME_TLS_KEY_FILE=$acme_dump_tls_dir/private/${HOSTNAME}.key
@@ -669,7 +650,7 @@ cntcfg_postfix_generate_tls_cert() {
 	if ([ -z "$SMTPD_TLS_CERT_FILE" ] && [ -z "$SMTPD_TLS_ECCERT_FILE" ] && \
 		[ -z "$SMTPD_TLS_DCERT_FILE" ] && [ -z "$SMTPD_TLS_CHAIN_FILES" ] && \
 		[ "$SMTPD_USE_TLS" = "yes" ] && _is_installed openssl); then
-		scr_info 1 "SMTPD_USE_TLS=yes but no certs given, so generating self-signed cert for host $HOSTNAME"
+		dc_log 4 "SMTPD_USE_TLS=yes but no certs given, so generating self-signed cert for host $HOSTNAME"
 		HOSTNAME=${HOSTNAME-$(hostname)}
 		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$postfix_smtpd_tls_dir/rsakey.pem}
 		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$postfix_smtpd_tls_dir/rsacert.pem}
@@ -682,7 +663,7 @@ cntcfg_postfix_generate_tls_cert() {
 cntcfg_postfix_activate_tls_cert() {
 	if ([ -n "$SMTPD_TLS_CERT_FILE" ] || [ -n "$SMTPD_TLS_ECCERT_FILE" ] || \
 		[ -n "$SMTPD_TLS_DCERT_FILE" ] || [ -n "$SMTPD_TLS_CHAIN_FILES" ]); then
-		scr_info 0 "Activating incoming tls"
+		dc_log 5 "Activating incoming tls"
 		postconf -e smtpd_use_tls=yes
 		postconf -e smtpd_tls_security_level=may
 		postconf -e smtpd_tls_auth_only=yes
@@ -698,7 +679,7 @@ cntcfg_postfix_apply_envvars() {
 		lcase_var="$(echo $env_var | tr '[:upper:]' '[:lower:]')"
 		if [ "$(postconf -H $lcase_var 2>/dev/null)" = "$lcase_var" ]; then
 			env_val="$(eval echo \$$env_var)"
-			scr_info 0 "Setting postfix parameter $lcase_var = $env_val"
+			dc_log 5 "Setting postfix parameter $lcase_var = $env_val"
 			postconf $lcase_var="$env_val"
 		fi
 	done
@@ -712,7 +693,7 @@ cntcfg_amavis_apply_envvars() {
 			lcase_var="$(echo $env_var | tr '[:upper:]' '[:lower:]')"
 			if [ -z "${amavis_var##*$env_var*}" ]; then
 				env_val="$(eval echo \$$env_var)"
-				scr_info 0 "Setting amavis parameter $lcase_var = $env_val"
+				dc_log 5 "Setting amavis parameter $lcase_var = $env_val"
 				modify $amavis_cf '\$'$lcase_var = "$env_val;"
 			fi
 		done
@@ -727,7 +708,7 @@ cntcfg_razor_register() {
 	local pass=$2
 	# create a razor conf file and discover razor servers
 	if _is_installed razor; then
-		scr_info 0 "Discovering razor servers"
+		dc_log 5 "Discovering razor servers"
 		razor-admin -home=$razor_home -create
 		if ([ -n "$auth" ] && [ ! -e $razor_identity ]); then
 			# register an identity if RAZOR_REGISTRATION is not empty
@@ -735,9 +716,9 @@ cntcfg_razor_register() {
 			[ -n "$pass" ] && pass="-pass=$pass"
 			if ping -c1 $razor_url >/dev/null 2>&1; then
 				local message="$(razor-admin -home=$razor_home $user $pass -register)"
-				scr_info 0 "$message"
+				dc_log 5 "$message"
 			else
-				scr_info 1 "Not registering razor, cannot ping $razor_url"
+				dc_log 4 "Not registering razor, cannot ping $razor_url"
 			fi
 		fi
 		_chowncond $razor_runas $razor_home
@@ -758,7 +739,7 @@ cntrun_chown_home() {
 cntrun_prune_pidfiles() {
 	for dir in /run /var/spool/postfix/pid; do
 		if [ -n "$(find -H $dir -type f -name "*.pid" -exec rm {} \; 2>/dev/null)" ]; then
-			scr_info 0 "Removed orphan pid files in $dir"
+			dc_log 5 "Removed orphan pid files in $dir"
 		fi
 	done
 }
@@ -766,7 +747,7 @@ cntrun_prune_pidfiles() {
 cntrun_loglevel_update() {
 	local loglevel=${1-$SYSLOG_LEVEL}
 	if [ -n "$loglevel" ]; then
-		scr_info 0 "Setting syslogd level = $loglevel"
+		dc_log 5 "Setting syslogd level = $loglevel"
 		setup-runit.sh "syslogd -nO- -l$loglevel $SYSLOG_OPTIONS"
 	fi
 	if [ "$calledformcli" = true ]; then
@@ -778,8 +759,31 @@ cntrun_spamassassin_update() {
 	# Download rules for spamassassin at start up.
 	# There is also an daily cron job that updates these.
 	if _is_installed spamassassin; then
-		scr_info 0 "Updating spamassassin rules"
+		dc_log 5 "Updating spamassassin rules"
 		( sa-update ) &
+	fi
+}
+
+cntrun_runit_spamd() {
+	if [ -d $DOCKER_SPAMD_DIR ]; then
+		local runitdir
+		local subdir
+		for watchdir in $DOCKER_SPAMD_DIR/*; do
+			if [ -d $watchdir ]; then
+				subdir=$(basename $watchdir)
+				dc_log 5 "Setting up spamd-$subdir service"
+				runitdir=$DOCKER_SPAMD_SV_DIR-$subdir
+				mkdir -p $runitdir
+				cat <<-!cat > $runitdir/run
+					#!/bin/sh -e
+					# define helpers
+					exec 2>&1
+					# run sa-learn.sh when a file is reated in $watchdir
+					exec $(which inotifyd) $(which sa-learn.sh) $watchdir:n
+				!cat
+				chmod +x $runitdir/run
+			fi
+		done
 	fi
 }
 
@@ -793,12 +797,12 @@ update_postfix_dhparam() {
 	# smtpd_tls_dh1024_param_file
 	local bits=${1-2048}
 	if _is_installed openssl; then
-		scr_info 0 "Regenerating postfix edh $bits bit parameters"
+		dc_log 5 "Regenerating postfix edh $bits bit parameters"
 		mkdir -p $postfix_smtpd_tls_dir
 		openssl dhparam -out $postfix_smtpd_tls_dir/dh$bits.pem $bits
 		postconf smtpd_tls_dh1024_param_file=$postfix_smtpd_tls_dir/dh$bits.pem
 	else
-		scr_info 1 "Cannot regenerate edh since openssl is not installed"
+		dc_log 4 "Cannot regenerate edh since openssl is not installed"
 	fi
 }
 
@@ -812,10 +816,10 @@ cntrun_cli_and_exit() {
 		local cmd=$1
 		if [ -n "$cmd" ]; then
 			shift
-			scr_info -1 "CMD:$cmd ARG:$@"
+			dc_log 7 "CMD:$cmd ARG:$@"
 			$cmd "$@"
 		else
-			scr_usage
+			usage
 		fi
 		exit 0
 	fi
@@ -826,7 +830,6 @@ cntrun_cli_and_exit() {
 # run config
 #
 
-cntrun_formats
 cntrun_cli_and_exit "$@"
 
 #cntrun_chown_home
@@ -834,6 +837,7 @@ cntrun_prune_pidfiles
 cntrun_cfgall
 cntrun_loglevel_update
 cntrun_spamassassin_update
+cntrun_runit_spamd
 
 #
 # start services

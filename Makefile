@@ -95,9 +95,6 @@ ps:
 
 prune:
 	docker image prune
-	docker container prune
-	docker volume prune
-	docker network prune
 
 test-all: test-up_0 test_1 test_2 test_3 test_4 test_5 test_6 test_7 test_8
 	
@@ -111,17 +108,17 @@ test-up_0:
 	#
 	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 	sleep $(TST_W8L1)
-	docker container logs $(TST_SRV) | grep '(entrypoint.sh)'
+	docker container logs $(TST_SRV) | grep 'entrypoint.sh'
 	docker stop $(TST_SRV)
 	sleep $(TST_W8S1)
 	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),base)
 	sleep $(TST_W8L1)
-	docker container logs $(TST_SRV) | grep '(entrypoint.sh)'
+	docker container logs $(TST_SRV) | grep 'entrypoint.sh'
 	docker stop $(TST_SRV)
 	sleep $(TST_W8S1)
 	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),full)
 	sleep $(TST_W8L1)
-	docker container logs $(TST_SRV) | grep '(entrypoint.sh)'
+	docker container logs $(TST_SRV) | grep 'entrypoint.sh'
 	docker stop $(TST_SRV)
 	sleep $(TST_W8S1)
 	#
@@ -257,7 +254,7 @@ test-mail_%: test-mail-send_% test-waits_% test-mail-read_%
 	#
 
 test-logs_%:
-	docker container logs $(TST_SRV) | grep '(entrypoint.sh)' || true
+	docker container logs $(TST_SRV) | grep 'entrypoint.sh' || true
 
 test-waits_%:
 	if [ $* -ge 5 ]; then sleep $(TST_W8S2); else sleep $(TST_W8S1); fi
