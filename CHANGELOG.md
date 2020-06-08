@@ -1,3 +1,7 @@
+# 1.4.0
+
+- [docker](src/docker/bin/entrypoint.sh) Now use entry.d and exit.d.
+
 # 1.3.7
 
 - [docker](src/docker/bin/entrypoint.sh) Added spamd-spam/ham service uses sa-learn for spam or ham.

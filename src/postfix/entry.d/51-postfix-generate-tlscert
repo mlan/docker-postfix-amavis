@@ -1,0 +1,18 @@
+#!/bin/sh
+#
+# 42-postfix-generate-tlscert
+#
+#
+#
+
+#
+# Depends
+#
+#. docker-common.inc
+#. postfix-common.inc
+
+#
+# Run
+#
+d_common_persist_mkdirs $DOCKER_POSTFIX_SMTPD_TLS_DIR
+d_common_tls_setup_selfsigned_cert $SMTPD_TLS_KEY_FILE $SMTPD_TLS_CERT_FILE
