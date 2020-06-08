@@ -1,5 +1,6 @@
 -include    *.mk .env .init.env
 
+srv_list ?= auth mail-app mail-db mail-mta
 _ip       = $(shell docker inspect -f \
 	'{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
 	$(1) | head -n1)
@@ -9,10 +10,12 @@ _ip       = $(shell docker inspect -f \
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
 
+test: mail-mta-test
+
+init: auth-up wait_11 auth-mod_index auth-add_user mail-db-up mail-mta-up mail-app-up
+
 ps:
 	docker-compose ps
-
-init: auth-up wait_11 auth-mod_index auth-add_user mail-db-up mail-mta-up mail-app-up wait_93 mail-app-create_store
 
 up:
 	docker-compose up -d
@@ -29,25 +32,38 @@ config:
 logs:
 	docker-compose logs --tail 10
 
+images:
+	docker-compose images
+
+$(addsuffix -up,$(srv_list)):
+	docker-compose up -d $(patsubst %-up,%,$@)
+
+$(addsuffix -down,$(srv_list)):
+	docker-compose rm -s $(patsubst %-down,%,$@)
+
+$(addsuffix -restart,$(srv_list)):
+	docker-compose restart $(patsubst %-restart,%,$@)
+
+$(addsuffix -top,$(srv_list)):
+	docker-compose top $(patsubst %-top,%,$@)
+
+$(addsuffix -logs,$(srv_list)):
+	docker-compose logs $(patsubst %-logs,%,$@)
+
+$(addsuffix -sh,$(srv_list)):
+	docker-compose exec $(patsubst %-sh,%,$@) sh
+
+$(addsuffix -sv,$(srv_list)):
+	docker-compose exec $(patsubst %-sv,%,$@) sh -c 'sv status $$DOCKER_RUNSV_DIR/*'
+
+$(addsuffix -diff,$(srv_list)):
+	docker container diff $(COMPOSE_PROJECT_NAME)_$(patsubst %-diff,%,$@)_1
+
 wait_%:
 	sleep $*
 
 web:
 	firefox localhost:8080 &
-
-test: mail-mta-test
-
-auth-up:
-	docker-compose up -d auth
-
-auth-down:
-	docker-compose rm -s auth
-
-auth-cmd:
-	docker-compose exec auth /bin/sh
-
-auth-logs:
-	docker container logs $(COMPOSE_PROJECT_NAME)_auth_1
 
 auth-show_conf:
 	docker-compose exec auth ldap search -b cn=config olcDatabase={1}mdb
@@ -62,21 +78,6 @@ auth-add_user:
 auth-mod_index:
 	printf "dn: olcDatabase={1}mdb,cn=config\nchangetype: modify\nadd: olcDbIndex\nolcDbIndex: cn,ou,uid,mail eq\n" \
 	| docker-compose exec -T auth ldap modify
-
-mail-mta-up:
-	docker-compose up -d mail-mta
-
-mail-mta-down:
-	docker-compose rm -s mail-mta
-
-mail-mta-cmd:
-	docker-compose exec mail-mta /bin/sh
-
-mail-mta-logs:
-	docker container logs $(COMPOSE_PROJECT_NAME)_mail-mta_1
-
-mail-mta-diff:
-	docker container diff $(COMPOSE_PROJECT_NAME)_mail-mta_1
 
 mail-mta-bayes:
 	docker-compose exec mail-mta sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis/.spamassassin && rm -rf bayesian.database'
@@ -101,38 +102,8 @@ mail-mta-debugtools:
 	docker-compose exec mail-mta apk --no-cache --update add \
 	nano less lsof htop openldap-clients bind-tools iputils strace
 
-mail-db-up:
-	docker-compose up -d mail-db
-
-mail-db-down:
-	docker-compose rm -s mail-db
-
-mail-db-cmd:
-	docker-compose exec mail-db /bin/bash
-
-mail-db-logs:
-	docker container logs $(COMPOSE_PROJECT_NAME)_mail-db_1
-
-mail-db-diff:
-	docker container diff $(COMPOSE_PROJECT_NAME)_mail-db_1
-
 mail-db-test:
 	docker-compose exec mail-db mysqlshow -u $(MYSQL_USER) $(MYSQL_DATABASE) -p$(MYSQL_PASSWORD)
-
-mail-app-up:
-	docker-compose up -d mail-app
-
-mail-app-down:
-	docker-compose rm -s mail-app
-
-mail-app-cmd:
-	docker-compose exec mail-app /bin/bash
-
-mail-app-logs:
-	docker container logs $(COMPOSE_PROJECT_NAME)_mail-app_1
-
-mail-app-diff:
-	docker container diff $(COMPOSE_PROJECT_NAME)_mail-app_1
 
 mail-app-debugtools:
 	docker-compose exec mail-app apt-get update
