@@ -1,6 +1,7 @@
 # 1.4.0
 
 - [docker](src/docker/bin/entrypoint.sh) Now use entry.d and exit.d.
+- [docker](src/docker/bin/docker-common.sh) Fixed minor issue in logging functionality.
 
 # 1.3.7
 

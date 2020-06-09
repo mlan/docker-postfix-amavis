@@ -10,8 +10,6 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 
 ## Features
 
-Feature list follows below
-
 - MTA (SMTP) server and client [Postfix](http://www.postfix.org/)
 - Anti-spam filter [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/)
 - Anti-virus [ClamAV](https://www.clamav.net/)
@@ -448,6 +446,7 @@ The level of output for logging is in the range from 0 to 7. The default is: `SY
 Separately, `LOG_LEVEL` and `SA_DEBUG` control the logging level of amavisd-new and spamassasin respectively.
 `LOG_LEVEL` takes valued from 0 to 5 and `SA_DEBUG` is either 1 (activated) or 0 (deactivated). Note that these messages will only appear in the log if `SYSLOG_LEVEL` is 7 (debug).
 
+# Knowledge base
 
 ## DNS records
 
@@ -479,3 +478,7 @@ GfWdg7QkdN6kR4V75MFlw624VY35DaXBvnlTJTgRg/EW72O1DiYVThkyCgpSYS8nmEQIDAQAB"
 ```
 
 The receiver can use the public key (value of the p tag) to then decrypt the hash value in the header field, and at the same time recalculate the hash value for the mail message (headers and body) that was received.
+
+## ClamAV, virus signatures and memory usage
+
+ClamAV holds search strings and regular expression in memory. The algorithms used are from the 1970s and are very memory efficient. The problem is the huge number of virus signatures. This leads to the algorithms' data-structures growing quite large. Consequently, The minimum recommended system requirements are for using [ClamAV](https://www.clamav.net/documents/introduction) is 1GiB.

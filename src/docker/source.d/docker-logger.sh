@@ -58,7 +58,7 @@ dc_log_tag() {
 		6|info)    c=92; l=INFO ;;
 		7|debug)   c=92; l=DEBUG ;;
 	esac
-	printf "\e[1m\e[%sm%s %s\e[0m\n" $c $string $l
+	printf "\e[%sm%s %s\e[0m\n" $c $string $l
 }
 
 #
@@ -79,7 +79,7 @@ dc_log_level() {
 # $DOCKER_LOGENTRY is not running.
 #
 dc_log_stamp() {
-	if pidof $DOCKER_LOGENTRY >/dev/null; then
+	if grep -q $DOCKER_LOGENTRY /proc/1/cmdline; then
 		date +'%b %e %X '
 	fi
 }

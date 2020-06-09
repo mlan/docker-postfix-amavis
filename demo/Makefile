@@ -44,6 +44,10 @@ $(addsuffix -down,$(srv_list)):
 $(addsuffix -restart,$(srv_list)):
 	docker-compose restart $(patsubst %-restart,%,$@)
 
+$(addsuffix -renew,$(srv_list)):
+	docker-compose rm -s $(patsubst %-renew,%,$@)
+	docker-compose up -d $(patsubst %-renew,%,$@)
+
 $(addsuffix -top,$(srv_list)):
 	docker-compose top $(patsubst %-top,%,$@)
 
@@ -98,9 +102,15 @@ mail-mta-quarantine_list:
 mail-mta-freshclam_nodns:
 	docker-compose exec mail-mta freshclam --no-dns
 
+mail-mta-clamdtop:
+	docker-compose exec mail-mta clamdtop
+
 mail-mta-debugtools:
 	docker-compose exec mail-mta apk --no-cache --update add \
 	nano less lsof htop openldap-clients bind-tools iputils strace
+
+mail-mta-htop: mail-mta-debugtools
+	docker-compose exec mail-mta htop
 
 mail-db-test:
 	docker-compose exec mail-db mysqlshow -u $(MYSQL_USER) $(MYSQL_DATABASE) -p$(MYSQL_PASSWORD)
