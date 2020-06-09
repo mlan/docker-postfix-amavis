@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# docker-postfix.inc
+# postfix-common.sh
 #
 # Define variables and functions used during container initialization here
 # and source this file in entry.d and exit.d files.
@@ -9,7 +9,8 @@
 #
 # Depends
 #
-#. docker-common.sh
+#source docker-common.sh
+#source docker-config.sh
 
 #
 # config
@@ -655,8 +656,8 @@ cntrun_runit_spamd() {
 					#!/bin/sh -e
 					# define helpers
 					exec 2>&1
-					# run sa-learn.sh when a file is reated in $watchdir
-					exec $(which inotifyd) $(which sa-learn.sh) $watchdir:n
+					# run amavis-learn.sh when a file is reated in $watchdir
+					exec $(which inotifyd) $(which amavis-learn.sh) $watchdir:n
 				!cat
 				chmod +x $runitdir/run
 			fi

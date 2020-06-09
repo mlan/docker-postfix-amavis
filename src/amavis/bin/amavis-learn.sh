@@ -1,5 +1,7 @@
 #!/bin/sh
 #
+# amavis-learn.sh
+#
 # The Spamassassin Bayes system does not activate until a certain
 # number of ham (non-spam) and spam have been learned. The default
 # is 200 of each ham and spam, but you can tune these up or down with

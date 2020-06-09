@@ -368,7 +368,7 @@ test-import-bayes: seed/bayesian.database.bak
 	docker exec -it $(TST_SRV) sh -c 'sa-learn --restore /tmp/bayesian.database.bak && chown -R amavis: /var/amavis/.spamassassin && rm -rf /tmp/bayesian.database.bak'
 
 test-learn-spam:
-	docker exec -it $(TST_SRV) sa-learn.sh a
+	docker exec -it $(TST_SRV) amavis-learn.sh a
 
 test-status-bayes:
 	docker exec -it $(TST_SRV) sa-learn --dump magic \

@@ -17,7 +17,6 @@ ENV	DOCKER_RUNSV_DIR=/etc/service \
 	DOCKER_PERSIST_DIR=/srv \
 	DOCKER_BIN_DIR=/usr/local/bin \
 	DOCKER_ENTRY_DIR=/etc/docker/entry.d \
-	DOCKER_SOURCE_DIR=/usr/local/bin \
 	SYSLOG_LEVEL=5 \
 	SYSLOG_OPTIONS=-SDt
 
@@ -27,7 +26,6 @@ ENV	DOCKER_RUNSV_DIR=/etc/service \
 
 COPY	src/*/bin $DOCKER_BIN_DIR/
 COPY	src/*/entry.d $DOCKER_ENTRY_DIR/
-COPY	src/*/source.d $DOCKER_SOURCE_DIR/
 
 #
 # Install
@@ -52,7 +50,7 @@ RUN	apk --update add \
 	"postfix start-fg" \
 	&& mkdir -p /var/mail && chown postfix: /var/mail \
 	&& mkdir -p /etc/ssl/postfix \
-	&& source docker-logger.sh \
+	&& source docker-common.sh \
 	&& source postfix-common.sh \
 	&& imgcfg_mvfile dist /etc/postfix/aliases \
 	&& imgcfg_cpfile dist /etc/postfix/main.cf /etc/postfix/master.cf \
@@ -107,7 +105,7 @@ RUN	apk --no-cache --update add \
 	&& setup-runit.sh "dovecot -F" \
 	&& rm -f /etc/ssl/dovecot/* \
 	&& addgroup postfix dovecot && addgroup dovecot postfix \
-	&& source docker-logger.sh \
+	&& source docker-common.sh \
 	&& source postfix-common.sh \
 	&& imgcfg_dovecot_passwdfile \
 	&& imgdir_persist /etc/dovecot \
@@ -153,8 +151,8 @@ RUN	apk --no-cache --update add \
 	"-q clamd" \
 	&& mkdir -p /etc/amavis && mv /etc/amavisd.conf /etc/amavis \
 	&& mkdir /run/amavis && chown amavis: /run/amavis \
-	&& source docker-logger.sh \
 	&& source docker-common.sh \
+	&& source docker-config.sh \
 	&& source postfix-common.sh \
 	&& dc_replace /usr/sbin/amavisd /etc/amavisd.conf /etc/amavis/amavisd.conf \
 	&& imgcfg_cpfile dist /etc/amavis/amavisd.conf /etc/clamav/clamd.conf /etc/clamav/freshclam.conf \

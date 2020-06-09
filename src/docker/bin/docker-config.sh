@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# docker-common.inc
+# docker-config.inc
 #
 # Define variables and functions used during container initialization here
 # and source this file in docker-entry.d and docker-exit.d files.

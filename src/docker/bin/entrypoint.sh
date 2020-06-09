@@ -14,15 +14,14 @@
 
 DOCKER_ENTRY_DIR=${DOCKER_ENTRY_DIR-/etc/docker/entry.d}
 DOCKER_EXIT_DIR=${DOCKER_EXIT_DIR-/etc/docker/exit.d}
-DOCKER_SOURCE_DIR=${DOCKER_SOURCE_DIR-/etc/docker/source.d}
 DOCKER_RUNSV_DIR=${DOCKER_RUNSV_DIR-/etc/service}
 
 #
 # source common functions
 #
-. $DOCKER_SOURCE_DIR/docker-logger.sh
-. $DOCKER_SOURCE_DIR/docker-common.sh
-. $DOCKER_SOURCE_DIR/postfix-common.sh
+source docker-common.sh
+source docker-config.sh
+source postfix-common.sh
 
 #
 # Functions
@@ -33,7 +32,7 @@ DOCKER_RUNSV_DIR=${DOCKER_RUNSV_DIR-/etc/service}
 # Read and execute commands from files in the _current_ shell environment
 #
 run_parts() {
-	for file in $(find $1 -type f -executable|sort); do
+	for file in $(find $1 -type f -executable 2>/dev/null|sort); do
 		dc_log 7 run_parts: executing $file
 		. $file
 	done

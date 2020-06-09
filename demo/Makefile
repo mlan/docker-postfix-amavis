@@ -97,7 +97,7 @@ mta-apk_list:
 	docker-compose exec mta /bin/sh -c 'for pkg in $$(apk info 2>/dev/null); do printf "%9s  %s\n" $$(apk info -s $$pkg 2>/dev/null | sed -n "2{p;q}") $$pkg; done | sort'
 
 mta-quarantine_list:
-	docker-compose exec mta amavisd-ls
+	docker-compose exec mta amavis-ls
 
 mta-freshclam_nodns:
 	docker-compose exec mta freshclam --no-dns

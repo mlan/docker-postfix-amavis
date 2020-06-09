@@ -27,7 +27,7 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 - Multi-staged build providing the images `mini`, `base` and `full`
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
-- Built in utility script `amavisd-ls` which lists the contents of quarantine
+- Built in utility script `amavis-ls` which lists the contents of quarantine
 - Built in utility script `conf` helping configuring Postfix, AMaViS, SpamAssassin, Razor, ClamAV and Dovecot
 - Makefile which can build images and do some management and testing
 - Health check
@@ -316,10 +316,10 @@ to use their email addresses as their user name. Example: `RAZOR_REGISTRATION=po
 
 ### Managing the quarantine
 
-A message is quarantined by being saved in the directory `/var/amavis/quarantine/` allowing manual inspection to determine weather or not to release it. The utility `amavisd-ls` allow some simple inspection of what is in the quarantine. To do so type:
+A message is quarantined by being saved in the directory `/var/amavis/quarantine/` allowing manual inspection to determine weather or not to release it. The utility `amavis-ls` allow some simple inspection of what is in the quarantine. To do so type:
 
 ```bash
-docker-compose exec mta amavisd-ls
+docker-compose exec mta amavis-ls
 ```
 
 A quarantined message receives one additional header field: an
@@ -496,3 +496,32 @@ The receiver can use the public key (value of the p tag) to then decrypt the has
 ## ClamAV, virus signatures and memory usage
 
 ClamAV holds search strings and regular expression in memory. The algorithms used are from the 1970s and are very memory efficient. The problem is the huge number of virus signatures. This leads to the algorithms' data-structures growing quite large. Consequently, The minimum recommended system requirements are for using [ClamAV](https://www.clamav.net/documents/introduction) is 1GiB.
+
+# Implementation
+
+Here some implementation details are presented.
+
+## Container init scheme
+
+The container use [runit](http://smarden.org/runit/), providing an init scheme and service supervision, allowing multiple services to be started.
+
+When the container is started, execution is handed over to the script [`entrypoint.sh`](src/docker/bin/entrypoint.sh). It has 4 stages; 0) *register* the SIGTERM [signal (IPC)](https://en.wikipedia.org/wiki/Signal_(IPC)) handler, which is programmed to run all exit scripts in `/etc/exitpoint.d/` and terminate all services, 1) *run* all entry scripts in `/etc/entrypoint.d/`, 2) *start* services registered in `/etc/service/`, 3) *wait* forever, allowing the signal handler to catch the SIGTERM and run the exit scripts and terminate all services.
+
+The entry scripts are responsible for tasks like, seeding configurations, register services and reading state files. These scripts are run before the services are started.
+
+There is also exit script that take care of tasks like, writing state files. These scripts are run when docker sends the SIGTERM signal to the main process in the container. Both `docker stop` and `docker kill --signal=TERM` sends SIGTERM.
+
+## Build assembly
+
+The entry and exit scripts, discussed above, as well as other utility scrips are copied to the image during the build phase. The source file tree was designed to facilitate simple scanning, using wild-card matching, of source-module directories for files that should be copied to image. Directory names indicate its file types so they can be copied to the correct locations. The code snippet in the `Dockerfile` which achieves this is show below.
+
+```dockerfile
+COPY	src/*/bin $DOCKER_BIN_DIR/
+COPY	src/*/entry.d $DOCKER_ENTRY_DIR/
+```
+
+There is also a mechanism for excluding files from being copied to the image from some source-module directories. Source-module directories to be excluded are listed in the file [`.dockerignore`](https://docs.docker.com/engine/reference/builder/#dockerignore-file). Since we don't want files from the module `notused` we list it in the `.dockerignore` file:
+
+```sh
+src/notused
+```

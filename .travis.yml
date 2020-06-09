@@ -1,15 +1,9 @@
-sudo: required
-
-services:
-  - docker
-
-install:
-  - make build-all
-
-before_script:
-  - sudo apt-get update -qq
-  - sudo apt-get install -y ldap-utils openssl jq
-
+language: ruby
+os: linux
+dist: bionic
+services: docker
+install: make build-all
+before_script: sudo apt-get install -y ldap-utils openssl jq
 script:
   - make test-up_0
   - make test_1

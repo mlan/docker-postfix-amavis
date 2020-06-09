@@ -168,7 +168,7 @@ which could be used to determine config state?
 
 Perhaps we just keep the config lock the way it is?
 
-## amavisd-ls
+## amavis-ls
 
 Perhaps, implement something more interactive using dialog?
 

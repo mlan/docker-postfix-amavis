@@ -1,5 +1,5 @@
 #!/bin/sh
-# amavisd-ls
+# amavis-ls
 
 amavis_home=${amavis_home-/var/amavis}
 amavis_quarantine=${amavis_quarantine-$amavis_home/quarantine}

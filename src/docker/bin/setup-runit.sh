@@ -2,7 +2,7 @@
 #
 # setup-runit.sh
 #
-source docker-logger.sh
+source docker-common.sh
 
 # use /etc/service if $DOCKER_RUNSV_DIR not already defined
 DOCKER_RUNSV_DIR=${DOCKER_RUNSV_DIR-/etc/service}

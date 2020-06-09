@@ -3,6 +3,9 @@
 - [docker](src/docker/bin/entrypoint.sh) Now use entry.d and exit.d.
 - [docker](src/docker/bin/docker-common.sh) Fixed minor issue in logging functionality.
 - [demo](demo) Made service names shorter.
+- [repo](.travis.yml) Revisited `.travis.yml`.
+- [repo](src) Revisited `src/module/bin` script names.
+
 
 # 1.3.7
 
@@ -26,7 +29,7 @@
 
 - Use refactored setup-runit.sh.
 - Fixed dumpcert.sh leaking to stdout. Have it write to logger instead.
-- Fixed amavisd-ls script that was broken.
+- Fixed amavis-ls script that was broken.
 - Added section "Managing the quarantine" in README.md.
 - Health-check now tests all services.
 - In demo/Makefile added config, web, -diff, mail-mta-apk_list, mail-mta-quarantine_list, mail-mta-debugtools, mail-app-test_lmtp.
@@ -41,7 +44,7 @@
 # 1.3.2
 
 - Now support configuring aliases database using environment variable MAIL_ALIASES.
-- New utility script amavisd-ls which lists contents of quarantine.
+- New utility script amavis-ls which lists contents of quarantine.
 - Make sure duplicate entries are NOT created with FORCE_CONFIG.
 - Use default value if MAIL_DOMAIN is empty and HOSTNAME is not FQDC.
 - New behavior; DKIM_SELECTOR must be non empty for DKIM to be configured.
