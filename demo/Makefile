@@ -1,6 +1,6 @@
 -include    *.mk .env .init.env
 
-srv_list ?= auth mail-app mail-db mail-mta
+srv_list ?= auth app db mta
 _ip       = $(shell docker inspect -f \
 	'{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
 	$(1) | head -n1)
@@ -10,9 +10,9 @@ _ip       = $(shell docker inspect -f \
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
 
-test: mail-mta-test
+test: mta-test
 
-init: auth-up wait_11 auth-mod_index auth-add_user mail-db-up mail-mta-up mail-app-up
+init: auth-up wait_11 auth-mod_index auth-add_user db-up mta-up app-up
 
 ps:
 	docker-compose ps
@@ -83,62 +83,62 @@ auth-mod_index:
 	printf "dn: olcDatabase={1}mdb,cn=config\nchangetype: modify\nadd: olcDbIndex\nolcDbIndex: cn,ou,uid,mail eq\n" \
 	| docker-compose exec -T auth ldap modify
 
-mail-mta-bayes:
-	docker-compose exec mail-mta sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis/.spamassassin && rm -rf bayesian.database'
+mta-bayes:
+	docker-compose exec mta sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis/.spamassassin && rm -rf bayesian.database'
 
-mail-mta-test:
+mta-test:
 	printf "EHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message\n\nGreat news! You can receive email.\n.\nQUIT\n" \
 	| nc -C localhost 25
 
-mail-mta-razor:
-	docker-compose exec mail-mta conf cntcfg_razor_register
+mta-razor:
+	docker-compose exec mta conf cntcfg_razor_register
 
-mail-mta-apk_list:
-	docker-compose exec mail-mta /bin/sh -c 'for pkg in $$(apk info 2>/dev/null); do printf "%9s  %s\n" $$(apk info -s $$pkg 2>/dev/null | sed -n "2{p;q}") $$pkg; done | sort'
+mta-apk_list:
+	docker-compose exec mta /bin/sh -c 'for pkg in $$(apk info 2>/dev/null); do printf "%9s  %s\n" $$(apk info -s $$pkg 2>/dev/null | sed -n "2{p;q}") $$pkg; done | sort'
 
-mail-mta-quarantine_list:
-	docker-compose exec mail-mta amavisd-ls
+mta-quarantine_list:
+	docker-compose exec mta amavisd-ls
 
-mail-mta-freshclam_nodns:
-	docker-compose exec mail-mta freshclam --no-dns
+mta-freshclam_nodns:
+	docker-compose exec mta freshclam --no-dns
 
-mail-mta-clamdtop:
-	docker-compose exec mail-mta clamdtop
+mta-clamdtop:
+	docker-compose exec mta clamdtop
 
-mail-mta-debugtools:
-	docker-compose exec mail-mta apk --no-cache --update add \
+mta-debugtools:
+	docker-compose exec mta apk --no-cache --update add \
 	nano less lsof htop openldap-clients bind-tools iputils strace
 
-mail-mta-htop: mail-mta-debugtools
-	docker-compose exec mail-mta htop
+mta-htop: mta-debugtools
+	docker-compose exec mta htop
 
-mail-db-test:
-	docker-compose exec mail-db mysqlshow -u $(MYSQL_USER) $(MYSQL_DATABASE) -p$(MYSQL_PASSWORD)
+db-test:
+	docker-compose exec db mysqlshow -u $(MYSQL_USER) $(MYSQL_DATABASE) -p$(MYSQL_PASSWORD)
 
-mail-app-debugtools:
-	docker-compose exec mail-app apt-get update
-	docker-compose exec mail-app apt-get install --yes \
+app-debugtools:
+	docker-compose exec app apt-get update
+	docker-compose exec app apt-get install --yes \
 	less nano ldap-utils htop net-tools lsof iputils-ping strace
 
-mail-app-htop: mail-app-debugtools
-	docker-compose exec mail-app htop
+app-htop: app-debugtools
+	docker-compose exec app htop
 
-mail-app-man_server:
-	docker-compose exec mail-app man kopano-server.cfg
+app-man_server:
+	docker-compose exec app man kopano-server.cfg
 
-mail-app-man_ldap:
-	docker-compose exec mail-app man kopano-ldap.cfg
+app-man_ldap:
+	docker-compose exec app man kopano-ldap.cfg
 
-mail-app-test_smtp: mail-mta-test
+app-test_smtp: mta-test
 
-mail-app-test_lmtp:
-	printf "LHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A LMTP test message from me to you\n\nDelete me, please \n.\nQUIT\n" | nc -C $(call _ip,$(COMPOSE_PROJECT_NAME)_mail-app_1) 2003
+app-test_lmtp:
+	printf "LHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A LMTP test message from me to you\n\nDelete me, please \n.\nQUIT\n" | nc -C $(call _ip,$(COMPOSE_PROJECT_NAME)_app_1) 2003
 
-mail-app-show_user1: 
-	docker-compose exec mail-app kopano-admin -l
+app-show_user1: 
+	docker-compose exec app kopano-admin -l
 
-mail-app-show_user2: mail-app-debugtools
-	docker-compose exec mail-app ldapsearch -H ldap://auth:389 -xLLL -b $(LDAP_BASE) '*'
+app-show_user2: app-debugtools
+	docker-compose exec app ldapsearch -H ldap://auth:389 -xLLL -b $(LDAP_BASE) '*'
 
-mail-app-create_store:
-	docker-compose exec mail-app kopano-admin --create-store $(LDAP_TEST_USER)
+app-create_store:
+	docker-compose exec app kopano-admin --create-store $(LDAP_TEST_USER)

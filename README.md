@@ -52,18 +52,18 @@ Often you want to configure Postfix and its components. There are different meth
 If you want to test the image you can start it using the destination domain `example.com` and table mail boxes for info@example.com and abuse@example.com using the shell command below.
 
 ```bash
-docker run -d --name mail-mta --hostname mx1.example.com -e MAIL_BOXES="info@example.com abuse@example.com" -p 127.0.0.1:25:25 mlan/postfix-amavis
+docker run -d --name mta --hostname mx1.example.com -e MAIL_BOXES="info@example.com abuse@example.com" -p 127.0.0.1:25:25 mlan/postfix-amavis
 ```
 
 ## Docker compose example
 
-An example of how to configure an web mail server using docker compose is given below. It defines 4 services, `mail-app`, `mail-mta`, `mail-db` and `auth`, which are the web mail server, the mail transfer agent, the SQL database and LDAP authentication respectively.
+An example of how to configure an web mail server using docker compose is given below. It defines 4 services, `app`, `mta`, `db` and `auth`, which are the web mail server, the mail transfer agent, the SQL database and LDAP authentication respectively.
 
 ```yaml
 version: '3'
 
 services:
-  mail-app:
+  app:
     image: mlan/kopano
     networks:
       - backend
@@ -71,13 +71,13 @@ services:
       - "127.0.0.1:8080:80"
     depends_on:
       - auth
-      - mail-db
-      - mail-mta
+      - db
+      - mta
     environment:
       - USER_PLUGIN=ldap
       - LDAP_URI=ldap://auth:389/
-      - MYSQL_HOST=mail-db
-      - SMTP_SERVER=mail-mta
+      - MYSQL_HOST=db
+      - SMTP_SERVER=mta
       - LDAP_SEARCH_BASE=${LDAP_BASE-dc=example,dc=com}
       - LDAP_USER_TYPE_ATTRIBUTE_VALUE=${LDAP_USEROBJ-posixAccount}
       - LDAP_GROUP_TYPE_ATTRIBUTE_VALUE=${LDAP_GROUPOBJ-posixGroup}
@@ -86,13 +86,15 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
       - SYSLOG_LEVEL=${SYSLOG_LEVEL-3}
     volumes:
-      - mail-conf:/etc/kopano
-      - mail-atch:/var/lib/kopano/attachments
-      - mail-sync:/var/lib/z-push
-      - mail-spam:/var/lib/kopano/spamd     # kopano-spamd integration
+      - app-conf:/etc/kopano
+      - app-atch:/var/lib/kopano/attachments
+      - app-sync:/var/lib/z-push
+      - app-spam:/var/lib/kopano/spamd     # kopano-spamd integration
       - /etc/localtime:/etc/localtime:ro    # Use host timezone
+    cap_add: # helps debugging by alowing strace
+      - sys_ptrace
 
-  mail-mta:
+  mta:
     image: mlan/postfix-amavis
     hostname: ${MAIL_SRV-mx}.${MAIL_DOMAIN-example.com}
     networks:
@@ -102,16 +104,28 @@ services:
     depends_on:
       - auth
     environment:
+      - MESSAGE_SIZE_LIMIT=${MESSAGE_SIZE_LIMIT-25600000}
       - LDAP_HOST=auth
-      - VIRTUAL_TRANSPORT=lmtp:mail-app:2003
+      - VIRTUAL_TRANSPORT=lmtp:app:2003
+      - SMTP_RELAY_HOSTAUTH=${SMTP_RELAY_HOSTAUTH-}
+      - SMTP_TLS_SECURITY_LEVEL=${SMTP_TLS_SECURITY_LEVEL-}
+      - SMTP_TLS_WRAPPERMODE=${SMTP_TLS_WRAPPERMODE-no}
       - LDAP_USER_BASE=ou=${LDAP_USEROU-users},${LDAP_BASE-dc=example,dc=com}
       - LDAP_QUERY_FILTER_USER=(&(objectclass=${LDAP_USEROBJ-posixAccount})(mail=%s))
+      - DKIM_SELECTOR=${DKIM_SELECTOR-default}
+      - SA_TAG_LEVEL_DEFLT=${SA_TAG_LEVEL_DEFLT-2.0}
+      - SA_DEBUG=${SA_DEBUG-0}
+      - SYSLOG_LEVEL=${SYSLOG_LEVEL-}
+      - LOG_LEVEL=${LOG_LEVEL-0}
+      - RAZOR_REGISTRATION=${RAZOR_REGISTRATION-}
     volumes:
-      - mail-mta:/srv
-      - mail-spam:/var/lib/kopano/spamd     # kopano-spamd integration
+      - mta:/srv
+      - app-spam:/var/lib/kopano/spamd     # kopano-spamd integration
       - /etc/localtime:/etc/localtime:ro    # Use host timezone
+    cap_add: # helps debugging by alowing strace
+      - sys_ptrace
 
-  mail-db:
+  db:
     image: mariadb
     command: ['--log_warnings=1']
     networks:
@@ -123,7 +137,7 @@ services:
       - MYSQL_USER=${MYSQL_USER-kopano}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
     volumes:
-      - mail-db:/var/lib/mysql
+      - db:/var/lib/mysql
       - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
   auth:
@@ -133,20 +147,20 @@ services:
     environment:
       - LDAP_LOGLEVEL=parse
     volumes:
-      - auth-db:/srv
+      - auth:/srv
       - /etc/localtime:/etc/localtime:ro    # Use host timezone
 
 networks:
   backend:
 
 volumes:
-  auth-db:
-  mail-conf:
-  mail-atch:
-  mail-db:
-  mail-mta:
-  mail-spam:
-  mail-sync:
+  app-atch:
+  app-conf:
+  app-spam:
+  app-sync:
+  auth:
+  db:
+  mta:
 ```
 
 This repository contains a [demo](demo) directory which hold the [docker-compose.yml](demo/docker-compose.yml) file as well as a [Makefile](demo/Makefile) which might come handy. From within the [demo](demo) directory you can start the containers by typing:
@@ -168,7 +182,7 @@ When you create the `mlan/postfix-amavis` container, you can configure the servi
 To see all available postfix configuration variables you can run `postconf` within the container, for example like this:
 
 ```bash
-docker exec -it mail-mta postconf
+docker exec -it mta postconf
 ```
 
 If you do, you will notice that configuration variable names are all lower case, but they will be matched with all uppercase environment variables by the container `entrypoint.sh` script.
@@ -180,7 +194,7 @@ By default, docker will store the configuration and run data within the containe
 To facilitate such approach, to achieve persistent storage, the configuration and run directories of the services has been consolidated to `/srv/etc` and `/srv/var` respectively. So if you to have chosen to use both persistent configuration and run data you can run the container like this:
 
 ```
-docker run -d --name mail-mta -v mail-mta:/srv -p 127.0.0.1:25:25 mlan/postfix-amavis
+docker run -d --name mta -v mta:/srv -p 127.0.0.1:25:25 mlan/postfix-amavis
 ```
 
 ## Outgoing SMTP relay
@@ -208,7 +222,7 @@ Postfix achieves client authentication using Dovecot. Client authentication is t
 You can list clients and their passwords in a space separated string using the format: `"username:{scheme}passwd"`. Example: `SMTPD_SASL_CLIENTAUTH="client1:{plain}passwd1 client2:{plain}passwd2"`. For security you might want to use encrypted passwords. One way to encrypt a password (`{plain}secret`) is by running
 
 ```bash
-docker exec -it mail-mta doveadm pw -p secret
+docker exec -it mta doveadm pw -p secret
 
 {CRYPT}$2y$05$Osj5ebALV/bXo18H4BKLa.J8Izn23ilI8TNA/lIHz92TuQFbZ/egK
 ```
@@ -252,7 +266,7 @@ Forward secrecy is accomplished by negotiating session keys using per-session cr
 The built in utility script `conf` can be used to generate the Diffie-Hellman parameters needed for forward secrecy.
 
 ```bash
-docker exec -it mail-mta conf update_postfix_dhparam
+docker exec -it mta conf update_postfix_dhparam
 ```
 
 ### Let’s Encrypt LTS certificates using Traefik
@@ -266,7 +280,7 @@ The `mlan/postfix-amavis` image looks for a file `ACME_FILE=/acme/acme.json`. at
 So reusing certificates from Traefik will work out of the box if the `/acme` directory in the Traefik container is also mounted in the mlan/postfix-amavis container.
 
 ```bash
-docker run -d -name mail-mta -v proxy-acme:/acme:ro mlan/postfix-amavis
+docker run -d -name mta -v proxy-acme:/acme:ro mlan/postfix-amavis
 ```
 
 Do not set `SMTPD_TLS_CERT_FILE` and/or `SMTPD_TLS_KEY_FILE` when using `ACME_FILE`.
@@ -305,7 +319,7 @@ to use their email addresses as their user name. Example: `RAZOR_REGISTRATION=po
 A message is quarantined by being saved in the directory `/var/amavis/quarantine/` allowing manual inspection to determine weather or not to release it. The utility `amavisd-ls` allow some simple inspection of what is in the quarantine. To do so type:
 
 ```bash
-docker-compose exec mail-mta amavisd-ls
+docker-compose exec mta amavisd-ls
 ```
 
 A quarantined message receives one additional header field: an
@@ -320,7 +334,7 @@ delivered (e.g. spam lovers) and some had it blocked.
 To release a quarantined message type:
 
 ```bash
-docker-compose exec mail-mta amavisd-release <file>
+docker-compose exec mta amavisd-release <file>
 ```
 
 ## Kopano-spamd integration with [mlan/kopano](https://github.com/mlan/docker-kopano)
