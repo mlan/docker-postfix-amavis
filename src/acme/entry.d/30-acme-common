@@ -1,11 +1,10 @@
 #!/bin/sh
 #
-# docker-acme.inc
+# 30-acme-common
 #
 # Define variables and functions used during container initialization here
-# and source this file in docker-entry.d and docker-exit.d files.
+# and source this file in docker/entry.d and docker/exit.d files.
 #
-source docker-modfile.inc
 
 #
 # Variables
@@ -23,13 +22,13 @@ DOCKER_ACME_SSL_H_KEY=$DOCKER_ACME_SSL_DIR/private/${HOSTNAME}.key
 DOCKER_ACME_SSL_D_CERT=$DOCKER_ACME_SSL_DIR/certs/${DOMAIN}.crt
 DOCKER_ACME_SSL_D_KEY=$DOCKER_ACME_SSL_DIR/private/${DOMAIN}.key
 
-setup_runit_acme_dump() {
+setup_runit_acme_extract() {
 	if (dc_is_installed jq && [ -s $ACME_FILE ]); then
 		dc_log 5 "Setup ACME TLS certificate monitoring"
-		setup-runit.sh "-n acme $(which inotifyd) $(which dumpcerts.sh) $ACME_FILE:c"
-		# run dumpcerts.sh on cnt creation (and every time the json file changes)
-		# dumpcerts.sh reports to logger but it is yet to be started so this run will be quiet
-		dumpcerts.sh $ACME_FILE $DOCKER_ACME_SSL_DIR
+		setup-runit.sh "-n acme $(which inotifyd) $(which acme-extract.sh) $ACME_FILE:c"
+		# run acme-extract.sh on cnt creation (and every time the json file changes)
+		# acme-extract.sh reports to logger but it is yet to be started so this run will be quiet
+		acme-extract.sh $ACME_FILE $DOCKER_ACME_SSL_DIR
 	fi
 }
 
@@ -46,5 +45,3 @@ setup_acme_tls_cert() {
 		fi
 	fi
 }
-
-

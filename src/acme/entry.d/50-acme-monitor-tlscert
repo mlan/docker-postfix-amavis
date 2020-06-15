@@ -1,17 +1,17 @@
 #!/bin/sh
 #
-# 41_postfix-acme_setup-tlscert
+# 50-acme-monitor-tlscert
 #
 #
 #
-source docker-common.inc
-source docker-postfix.inc
-source docker-acme.inc
+#source docker-common.sh
+#source postfix-common.sh
+#source acme-common.sh
 
 #
 # Run relevant functions defined in docker-entry.inc
 #
 d_common_persist_dirs $DOCKER_POSTFIX_SMTPD_SSL_DIR $DOCKER_ACME_SSL_DIR
-d_acme_setup_runit_dump $ACME_FILE $DOCKER_ACME_SSL_DIR
+setup_runit_acme_extract $ACME_FILE $DOCKER_ACME_SSL_DIR
 d_acme_setup_tls_cert $DOCKER_POSTFIX_SMTPD_SSL_CERT $DOCKER_POSTFIX_SMTPD_SSL_KEY $DOCKER_ACME_SSL_DIR
 d_postfix_activate_tls_cert

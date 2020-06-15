@@ -2,7 +2,7 @@
 
 ![travis-ci test](https://img.shields.io/travis/mlan/docker-postfix-amavis.svg?label=build&style=flat-square&logo=travis)
 ![docker build](https://img.shields.io/docker/cloud/build/mlan/postfix-amavis.svg?label=build&style=flat-square&logo=docker)
-![image size](https://img.shields.io/docker/image-size/mlan/postfix-amavis.svg?label=size&style=flat-square&logo=docker)
+![image size](https://img.shields.io/docker/image-size/mlan/postfix-amavis/latest.svg?label=size&style=flat-square&logo=docker)
 ![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=flat-square&logo=docker)
 ![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=flat-square&logo=docker)
 

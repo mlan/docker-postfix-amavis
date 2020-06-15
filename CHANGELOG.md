@@ -1,5 +1,6 @@
 # 1.4.0
 
+- [acme](src/acme) Introduce acme-extract.sh.
 - [docker](src/docker/bin/entrypoint.sh) Now use entry.d and exit.d.
 - [docker](src/docker/bin/docker-common.sh) Fixed minor issue in logging functionality.
 - [demo](demo) Made service names shorter.

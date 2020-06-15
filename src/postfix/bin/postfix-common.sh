@@ -94,8 +94,8 @@ imgcfg_runit_acme_dump() {
 			#!/bin/sh -e
 			# define helpers
 			exec 2>&1
-			# run dumpcerts.sh when $acme_dump_json_link changes
-			exec $(which inotifyd) $(which dumpcerts.sh) $acme_dump_json_link:c
+			# run acme-extract.sh when $acme_dump_json_link changes
+			exec $(which inotifyd) $(which acme-extract.sh) $acme_dump_json_link:c
 		!cat
 		chmod +x $acme_dump_sv_dir/run
 		# make sure that there is a file that inotifyd can monitor
@@ -516,8 +516,8 @@ cntcfg_acme_postfix_tls_cert() {
 		ACME_TLS_KEY_FILE=$acme_dump_tls_dir/private/${HOSTNAME}.key
 		export SMTPD_TLS_CERT_FILE=${SMTPD_TLS_CERT_FILE-$ACME_TLS_CERT_FILE}
 		export SMTPD_TLS_KEY_FILE=${SMTPD_TLS_KEY_FILE-$ACME_TLS_KEY_FILE}
-		# run dumpcerts.sh on cnt creation (and every time the json file changes)
-		dumpcerts.sh $acme_dump_json_link $acme_dump_tls_dir
+		# run acme-extract.sh on cnt creation (and every time the json file changes)
+		acme-extract.sh $acme_dump_json_link $acme_dump_tls_dir
 	fi
 }
 
