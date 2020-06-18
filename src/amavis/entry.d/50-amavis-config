@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# 50-amavis-config
+#
+# Functions defined in:
+# 10-amavis-common
+#
+#
+
+#
+# Run late
+#
+if dc_is_unlocked; then
+	amavis_setup_domains
+	amavis_setup_dkim
+	amavis_apply_envvars
+#	dp_razor_register
+fi
+amavis_update_spamassassin
+amavis_monitor_spamd

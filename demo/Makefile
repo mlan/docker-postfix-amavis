@@ -57,6 +57,9 @@ $(addsuffix -logs,$(srv_list)):
 $(addsuffix -sh,$(srv_list)):
 	docker-compose exec $(patsubst %-sh,%,$@) sh
 
+$(addsuffix -env,$(srv_list)):
+	docker-compose exec $(patsubst %-env,%,$@) env
+
 $(addsuffix -sv,$(srv_list)):
 	docker-compose exec $(patsubst %-sv,%,$@) sh -c 'sv status $$DOCKER_RUNSV_DIR/*'
 

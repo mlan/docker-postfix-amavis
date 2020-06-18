@@ -9,8 +9,12 @@
 #
 # Depends
 #
-#source docker-common.sh
+source docker-common.sh
 #source docker-config.sh
+#
+# DOCKER_APPL_RUNAS DOCKER_IMAPPASSWD_FILE
+#
+DOVECOT_CF=${DOVECOT_CF-$DOCKER_IMAP_DIR/dovecot.conf}
 
 #
 # config
@@ -36,8 +40,6 @@ amavis_runas=${amavis_runas-amavis}
 amavis_home=${amavis_home-/var/amavis}
 amavis_cf=${amavis_cf-/etc/amavis/amavisd.conf}
 dkim_dir=${dkim_dir-/var/db/dkim}
-dovecot_users=${dovecot_users-/etc/dovecot/virt-passwd}
-dovecot_cf=${dovecot_cf-/etc/dovecot/dovecot.conf}
 razor_url=${razor_url-discovery.razor.cloudmark.com}
 razor_home=${razor_home-/var/amavis/.razor}
 razor_identity=${razor_identity-$razor_home/identity}
@@ -59,17 +61,16 @@ amavis_var="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BA
 # package install functions
 #
 
-imgcfg_dovecot_passwdfile() {
+pc_dovecot_setup_passwdfile() {
 	# run during build time
 	# configure dovecot to use passwd-file
-	[ -e ${1-$dovecot_cf} ] && cp $dovecot_cf $dovecot_cf.dist
-	cat <<-!cat > ${1-$dovecot_cf}
+	cat <<-!cat > ${1-$DOVECOT_CF}
 		ssl = no
 		disable_plaintext_auth = no
 		auth_mechanisms = plain login
 		passdb {
 		    driver = passwd-file
-		    args = ${2-$dovecot_users}
+		    args = ${2-$DOCKER_IMAPPASSWD_FILE}
 		}
 		userdb {
 		    driver = static
@@ -78,12 +79,11 @@ imgcfg_dovecot_passwdfile() {
 		service auth {
 		    unix_listener /var/spool/postfix/private/auth {
 		        mode  = 0660
-		        user  = $postfix_runas
-		        group = $postfix_runas
+		        user  = $DOCKER_APPL_RUNAS
+		        group = $DOCKER_APPL_RUNAS
 		    }
 		}
 	!cat
-	[ -e ${1-$dovecot_cf} ] && cp $dovecot_cf $dovecot_cf.bld
 }
 
 imgcfg_runit_acme_dump() {
@@ -104,7 +104,7 @@ imgcfg_runit_acme_dump() {
 	fi
 }
 
-imgcfg_amavis_postfix() {
+pc_amavis_setup_postfix() {
 	# https://amavis.org/README.postfix.html#basics_transport
 	# https://amavis.org/README.postfix.html#d0e1110
 	dc_log 5 "Configuring postfix-amavis"
@@ -250,7 +250,7 @@ lock_config() {
 cntrun_cfgall() {
 	if _need_config; then
 		cntcfg_default_domains
-		cntcfg_acme_postfix_tls_cert
+#		cntcfg_acme_postfix_tls_cert
 		cntcfg_amavis_domains
 		cntcfg_amavis_dkim
 		cntcfg_amavis_apply_envvars
@@ -338,7 +338,7 @@ cntcfg_default_domains() {
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	if [ -z "$domains" ]; then
 		export MAIL_DOMAIN=$docker_default_domain
-		dc_log 4 "No MAIL_DOMAIN, non FQDC HOSTNAME, so using $MAIL_DOMAIN"
+		dc_log 4 "No MAIL_DOMAIN, non FQDN HOSTNAME, so using $MAIL_DOMAIN"
 	fi
 }
 
@@ -361,22 +361,22 @@ cntcfg_postfix_domains() {
 }
 
 cntcfg_amavis_domains() {
-	# NOTE: the contanare only starts if either MAIL_DOMAIN or hostname is fqdn
+	# NOTE: the container only starts if either MAIL_DOMAIN or hostname is FQDN
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	local domain_main=$(echo $domains | sed 's/\s.*//')
 	local domain_extra=$(echo $domains | sed 's/[^ ]* *//' | sed 's/[^ ][^ ]*/"&"/g' | sed 's/ /, /g')
 	if (_is_installed amavisd-new && [ -n "$domain_main" ]); then
 		dc_log 5 "Configuring amavis for domains $domains"
-		modify $amavis_cf '\$mydomain' = "'"$domain_main"';"
+		dc_modify $amavis_cf '\$mydomain' = "'"$domain_main"';"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
-			modify $amavis_cf '@local_domains_maps' = '( [".$mydomain", '$domain_extra'] );'
+			dc_modify $amavis_cf '@local_domains_maps' = '( [".$mydomain", '$domain_extra'] );'
 		fi
 	fi
 }
 
 cntcfg_amavis_dkim() {
 	# generate and activate dkim domainkey.
-	# incase of multi domain generate key for first domain only, but accept it
+	# in case of multi domain generate key for first domain only, but accept it
 	# to be used for all domains specified.
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	local domain_main=$(echo $domains | sed 's/\s.*//')
@@ -411,7 +411,7 @@ cntcfg_amavis_dkim() {
 			amavisd showkeys $domain_main > $txtfile
 			#amavisd testkeys $domain_main
 		fi
-		_chowncond $user $dkim_dir
+		dc_chowncond $user $dkim_dir
 	fi
 }
 
@@ -456,7 +456,7 @@ cntcfg_postfix_mailbox_auth_ldap() {
 		fi
 		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxes
 			mkdir -p $mail_dir
-			_chowncond $postfix_runas $mail_dir
+			dc_chowncond $postfix_runas $mail_dir
 			postconf virtual_mailbox_base=$mail_dir
 			postconf virtual_uid_maps=static:$(id -u $postfix_runas)
 			postconf virtual_gid_maps=static:$(id -g $postfix_runas)
@@ -477,7 +477,7 @@ cntcfg_postfix_mailbox_auth_hash() {
 		postmap hash:$postfix_virt_mailbox
 		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
 			mkdir -p $mail_dir
-			_chowncond $postfix_runas $mail_dir
+			dc_chowncond $postfix_runas $mail_dir
 			postconf virtual_mailbox_base=$mail_dir
 			postconf virtual_uid_maps=static:$(id -u $postfix_runas)
 			postconf virtual_gid_maps=static:$(id -g $postfix_runas)
@@ -572,7 +572,7 @@ cntcfg_amavis_apply_envvars() {
 			if [ -z "${amavis_var##*$env_var*}" ]; then
 				env_val="$(eval echo \$$env_var)"
 				dc_log 5 "Setting amavis parameter $lcase_var = $env_val"
-				modify $amavis_cf '\$'$lcase_var = "$env_val;"
+				dc_modify $amavis_cf '\$'$lcase_var = "$env_val;"
 			fi
 		done
 	fi
@@ -599,7 +599,7 @@ cntcfg_razor_register() {
 				dc_log 4 "Not registering razor, cannot ping $razor_url"
 			fi
 		fi
-		_chowncond $razor_runas $razor_home
+		dc_chowncond $razor_runas $razor_home
 	fi
 }
 
@@ -609,9 +609,9 @@ cntcfg_razor_register() {
 
 cntrun_chown_home() {
 	# do we need to check  /var/amavis/.spamassassin/bayes_journal?
-	_chowncond $postfix_runas $postfix_home
-	_chowncond $postfix_runas $mail_dir
-	_chowncond $amavis_runas  $amavis_home
+	dc_chowncond $postfix_runas $postfix_home
+	dc_chowncond $postfix_runas $mail_dir
+	dc_chowncond $amavis_runas  $amavis_home
 }
 
 cntrun_prune_pidfiles() {

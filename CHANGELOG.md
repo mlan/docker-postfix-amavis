@@ -1,12 +1,22 @@
-# 1.4.0
+# 2.0.0
 
-- [acme](src/acme) Introduce acme-extract.sh.
+- [repo](src) Cut up monolithic configuration script (entrypoint.sh) into, easily reusable, modules.
 - [docker](src/docker/bin/entrypoint.sh) Now use entry.d and exit.d.
+- [docker](Dockerfile) Now use an unlock file, instead of a lock file, since it unlikely to accidentally *create* a file.
+- [docker](Dockerfile) Improved configurability of Dockerfile.
+- [docker](Dockerfile) Now use alpine:3.12 (postfix:3.5.2).
+- [docker](src/docker) Moved function dc_is_installed() into docker-common.sh.
+- [acme](src/acme) Added module providing Let's encrypt TLS certificates using ACME.
+- [acme](src/acme/bin/acme-extract.sh) Support both v1 and v2 formats of the acme.json file.
+- [acme](src/acme/entry.d/50-acme-monitor-tlscert) Support both host and domain wildcard TLS certificates.
+- [amavis](src/amavis) Added module providing amavis configuration.
+- [dovecot](src/dovecot) Added module providing dovecot configuration.
+- [postfix](src/postfix) Added module providing postfix configuration.
 - [docker](src/docker/bin/docker-common.sh) Fixed minor issue in logging functionality.
 - [demo](demo) Made service names shorter.
 - [repo](.travis.yml) Revisited `.travis.yml`.
 - [repo](src) Revisited `src/module/bin` script names.
-
+- [test](test) Cleaned up test directory and files.
 
 # 1.3.7
 

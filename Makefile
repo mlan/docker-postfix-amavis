@@ -35,9 +35,9 @@ TST_STAG ?= -99
 TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) \
 		-e SA_TAG_LEVEL_DEFLT=$(TST_STAG) -e SA_DEBUG=$(TST_SBUG) -e LOG_LEVEL=$(TST_ALOG)
 TST_MSG  ?= ---test-message---
-TST_KEY  ?= tmp/local_priv_key.pem
-TST_CRT  ?= tmp/local_ca_cert.pem
-TST_ACME ?= tmp/acme/acme.json
+TST_KEY  ?= test/tmp/local_priv_key.pem
+TST_CRT  ?= test/tmp/local_ca_cert.pem
+TST_ACME ?= test/tmp/acme/acme.json
 TST_ATLS ?= -e ACME_FILE=/acme/acme.json -v $(shell pwd)/$(shell dirname $(TST_ACME)):/acme
 TST_CRTD ?= 30
 TST_PKEY ?= /etc/ssl/postfix/priv.pem
@@ -301,12 +301,12 @@ $(TST_CRT): $(TST_KEY)
 	openssl req -x509 -utf8 -new -batch -days $(TST_CRTD) \
 		-subj "/CN=$(TST_SRV)" -key $(TST_KEY) -out $(TST_CRT)
 
-$(TST_KEY): tmp
+$(TST_KEY): test/tmp
 	openssl genrsa -out $(TST_KEY)
 
 $(TST_ACME): $(TST_CRT)
 	mkdir -p $(shell dirname $(TST_ACME))
-	test/gen-acme-json.sh $(TST_RADR)@$(TST_DOM) srv.$(TST_DOM) $(TST_KEY) $(TST_CRT) > $(TST_ACME)
+	test/bin/gen-acme-json.sh $(TST_RADR)@$(TST_DOM) srv.$(TST_DOM) $(TST_KEY) $(TST_CRT) > $(TST_ACME)
 
 test-cert-rm:
 	rm $(TST_KEY) $(TST_CRT) $(TST_ACME)
@@ -328,6 +328,12 @@ test-diff-clt:
 
 test-diff-srv:
 	docker container diff $(TST_SRV)
+
+test-sv-clt:
+	docker exec -it $(TST_CLT) sh -c 'sv status $$DOCKER_RUNSV_DIR/*'
+
+test-sv-srv:
+	docker exec -it $(TST_SRV) sh -c 'sv status $$DOCKER_RUNSV_DIR/*'
 
 test-regen-edh-srv:
 	docker exec -it $(TST_SRV) conf update_postfix_dhparam
@@ -354,17 +360,14 @@ test-debugtools-srv:
 test-learn-bayes:
 	docker exec -it $(TST_SRV) sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis && rm -rf bayesian.database'
 
-seed:
-	mkdir -p seed
+test/tmp:
+	mkdir -p test/tmp
 
-tmp:
-	mkdir -p tmp
+test-export-bayes: test/tmp
+	docker exec -i $(TST_SRV) sa-learn --backup > test/tmp/bayesian.database.bak
 
-test-export-bayes: seed
-	docker exec -i $(TST_SRV) sa-learn --backup > seed/bayesian.database.bak
-
-test-import-bayes: seed/bayesian.database.bak
-	docker cp seed/bayesian.database.bak $(TST_SRV):/tmp/.
+test-import-bayes: test/tmp/bayesian.database.bak
+	docker cp test/tmp/bayesian.database.bak $(TST_SRV):/tmp/.
 	docker exec -it $(TST_SRV) sh -c 'sa-learn --restore /tmp/bayesian.database.bak && chown -R amavis: /var/amavis/.spamassassin && rm -rf /tmp/bayesian.database.bak'
 
 test-learn-spam:

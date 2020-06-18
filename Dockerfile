@@ -17,8 +17,31 @@ ENV	DOCKER_RUNSV_DIR=/etc/service \
 	DOCKER_PERSIST_DIR=/srv \
 	DOCKER_BIN_DIR=/usr/local/bin \
 	DOCKER_ENTRY_DIR=/etc/docker/entry.d \
+	DOCKER_SSL_DIR=/etc/ssl \
+	DOCKER_SPOOL_DIR=/var/spool/postfix \
+	DOCKER_CONF_DIR=/etc/postfix \
+	DOCKER_MAIL_DIR=/etc/mail \
+	DOCKER_MAIL_LIB=/var/mail \
+	DOCKER_IMAP_DIR=/etc/dovecot \
+	DOCKER_MILT_DIR=/etc/amavis \
+	DOCKER_MILT_LIB=/var/amavis \
+	DOCKER_DKIM_LIB=/var/lib/dkim \
+	DOCKER_AV_DIR=/etc/clamav \
+	DOCKER_AV_LIB=/var/lib/clamav \
+	DOCKER_SPAM_LIB=/var/lib/spamassassin \
+	DOCKER_UNLOCK_FILE=/srv/etc/.docker.unlock \
+	DOCKER_APPL_RUNAS=postfix \
+	DOCKER_IMAP_RUNAS=dovecot \
+	DOCKER_MILT_RUNAS=amavis \
+	DOCKER_AV_RUNAS=clamav \
 	SYSLOG_LEVEL=5 \
 	SYSLOG_OPTIONS=-SDt
+ENV	DOCKER_ACME_SSL_DIR=$DOCKER_SSL_DIR/acme \
+	DOCKER_APPL_SSL_DIR=$DOCKER_SSL_DIR/postfix \
+	DOCKER_MILT_FILE=$DOCKER_MILT_DIR/amavisd.conf \
+	DOCKER_AVNGN_FILE=$DOCKER_AV_DIR/clamd.conf \
+	DOCKER_AVSIG_FILE=$DOCKER_AV_DIR/freshclam.conf \
+	DOCKER_IMAPPASSWD_FILE=$DOCKER_IMAP_DIR/virt-passwd
 
 #
 # Copy utility scripts including entrypoint.sh to image
@@ -36,28 +59,50 @@ COPY	src/*/entry.d $DOCKER_ENTRY_DIR/
 # i.e., containers on the same network.
 #
 
-RUN	apk --update add \
+RUN	mkdir -p ${DOCKER_PERSIST_DIR}${DOCKER_SPOOL_DIR} \
+	${DOCKER_PERSIST_DIR}${DOCKER_CONF_DIR} \
+	${DOCKER_PERSIST_DIR}${DOCKER_ACME_SSL_DIR} \
+	${DOCKER_PERSIST_DIR}${DOCKER_APPL_SSL_DIR} \
+	${DOCKER_PERSIST_DIR}${DOCKER_MAIL_DIR} \
+	${DOCKER_PERSIST_DIR}${DOCKER_MAIL_LIB} \
+	${DOCKER_PERSIST_DIR}${DOCKER_IMAP_DIR} \
+	${DOCKER_PERSIST_DIR}${DOCKER_MILT_DIR} \
+	${DOCKER_PERSIST_DIR}${DOCKER_MILT_LIB} \
+	${DOCKER_PERSIST_DIR}${DOCKER_DKIM_LIB} \
+	${DOCKER_PERSIST_DIR}${DOCKER_AV_DIR} \
+	${DOCKER_PERSIST_DIR}${DOCKER_AV_LIB} \
+	${DOCKER_PERSIST_DIR}${DOCKER_SPAM_LIB} \
+	$DOCKER_SSL_DIR \
+	&& rmdir $DOCKER_MAIL_LIB \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_SPOOL_DIR} $DOCKER_SPOOL_DIR \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_CONF_DIR} $DOCKER_CONF_DIR \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_ACME_SSL_DIR} $DOCKER_ACME_SSL_DIR \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_APPL_SSL_DIR} $DOCKER_APPL_SSL_DIR \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_MAIL_DIR} $DOCKER_MAIL_DIR \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_MAIL_LIB} $DOCKER_MAIL_LIB \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_IMAP_DIR} $DOCKER_IMAP_DIR \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_MILT_DIR} $DOCKER_MILT_DIR \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_MILT_LIB} $DOCKER_MILT_LIB \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_DKIM_LIB} $DOCKER_DKIM_LIB \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_AV_DIR} $DOCKER_AV_DIR \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_AV_LIB} $DOCKER_AV_LIB \
+	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_SPAM_LIB} $DOCKER_SPAM_LIB \
+	&& apk --no-cache --update add \
 	runit \
 	postfix \
 	postfix-ldap \
-	&& if [ -n "$(apk search -x cyrus-sasl-plain)" ]; then apk add \
+#	&& if [ -n "$(apk search -x cyrus-sasl-plain)" ]; then apk add \
 	cyrus-sasl-plain \
 	cyrus-sasl-login \
-	; fi \
+#	; fi \
 	&& setup-runit.sh \
 	"syslogd -nO- -l$SYSLOG_LEVEL $SYSLOG_OPTIONS" \
 	"crond -f -c /etc/crontabs" \
 	"postfix start-fg" \
-	&& mkdir -p /var/mail && chown postfix: /var/mail \
-	&& mkdir -p /etc/ssl/postfix \
-	&& source docker-common.sh \
-	&& source postfix-common.sh \
-	&& imgcfg_mvfile dist /etc/postfix/aliases \
-	&& imgcfg_cpfile dist /etc/postfix/main.cf /etc/postfix/master.cf \
+	&& chown ${DOCKER_APPL_RUNAS}: ${DOCKER_PERSIST_DIR}$DOCKER_MAIL_LIB \
+	&& mv $DOCKER_CONF_DIR/aliases $DOCKER_CONF_DIR/aliases.dist \
 	&& postconf -e mynetworks_style=subnet \
-	&& rm -rf /var/cache/apk/* \
-	&& imgcfg_cpfile bld /etc/postfix/main.cf /etc/postfix/master.cf \
-	&& imgdir_persist /etc/postfix /etc/ssl /var/spool/postfix /var/mail
+	&& echo "Allow configuration phase." > $DOCKER_UNLOCK_FILE
 
 #
 # state standard smtp, smtps and submission ports
@@ -104,13 +149,10 @@ RUN	apk --no-cache --update add \
 	jq \
 	&& setup-runit.sh "dovecot -F" \
 	&& rm -f /etc/ssl/dovecot/* \
-	&& addgroup postfix dovecot && addgroup dovecot postfix \
-	&& source docker-common.sh \
-	&& source postfix-common.sh \
-	&& imgcfg_dovecot_passwdfile \
-	&& imgdir_persist /etc/dovecot \
-	&& mkdir -p /etc/ssl/acme \
-	&& imgcfg_runit_acme_dump
+	&& addgroup $DOCKER_APPL_RUNAS $DOCKER_IMAP_RUNAS \
+	&& addgroup $DOCKER_IMAP_RUNAS $DOCKER_APPL_RUNAS \
+	&& source dovecot-common.sh \
+	&& dc_dovecot_setup_passwdfile
 
 #
 #
@@ -149,35 +191,32 @@ RUN	apk --no-cache --update add \
 	"amavisd foreground" \
 	"freshclam -d --quiet" \
 	"-q clamd" \
-	&& mkdir -p /etc/amavis && mv /etc/amavisd.conf /etc/amavis \
-	&& mkdir /run/amavis && chown amavis: /run/amavis \
 	&& source docker-common.sh \
 	&& source docker-config.sh \
-	&& source postfix-common.sh \
-	&& dc_replace /usr/sbin/amavisd /etc/amavisd.conf /etc/amavis/amavisd.conf \
-	&& imgcfg_cpfile dist /etc/amavis/amavisd.conf /etc/clamav/clamd.conf /etc/clamav/freshclam.conf \
-	&& addgroup clamav amavis && addgroup amavis clamav \
-	&& ln -sf /var/amavis/.spamassassin /root/.spamassassin \
-	&& mkdir -p /var/amavis/.razor && chown amavis: /var/amavis/.razor \
-	&& ln -sf /var/amavis/.razor /root/.razor \
-	&& mkdir -p /var/db/dkim && chown amavis: /var/db/dkim \
-	&& dc_addafter /etc/amavis/amavisd.conf '^$mydomain' '$inet_socket_bind = \x27127.0.0.1\x27; # limit to ipv4 loopback, no ipv6 support' \
-	&& dc_addafter /etc/amavis/amavisd.conf '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \
-	&& dc_addafter /etc/amavis/amavisd.conf '^$log_templ' '# $sa_debug = 0; # debug SpamAssassin' \
-	&& dc_uncommentsection /etc/amavis/amavisd.conf "# ### http://www.clamav.net/" \
-	&& dc_replace /etc/amavis/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
-	&& dc_modify /etc/amavis/amavisd.conf '\$pid_file' = '"/run/amavis/amavisd.pid";' \
-	&& imgcfg_amavis_postfix \
-	&& mkdir /run/clamav && chown clamav: /run/clamav \
-	&& dc_modify /etc/clamav/clamd.conf Foreground yes \
-	&& dc_modify /etc/clamav/clamd.conf LogSyslog yes \
-	&& dc_modify /etc/clamav/clamd.conf LogFacility LOG_MAIL \
-	&& dc_comment /etc/clamav/clamd.conf LogFile \
-	&& dc_modify /etc/clamav/freshclam.conf Foreground yes \
-	&& dc_modify /etc/clamav/freshclam.conf LogSyslog yes \
-	&& dc_comment /etc/clamav/freshclam.conf UpdateLogFile \
-	&& dc_modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL \
-	&& imgcfg_cpfile bld /etc/amavis/amavisd.conf /etc/clamav/clamd.conf \
-		/etc/clamav/freshclam.conf /etc/postfix/main.cf /etc/postfix/master.cf \
-	&& imgdir_persist /etc/amavis /etc/mail /etc/clamav \
-		/var/amavis /var/db/dkim /var/lib/spamassassin /var/lib/clamav
+	&& mv /etc/amavisd.conf $DOCKER_MILT_DIR \
+	&& dc_replace /usr/sbin/amavisd /etc/amavisd.conf $DOCKER_MILT_DIR/amavisd.conf \
+	&& addgroup $DOCKER_AV_RUNAS $DOCKER_MILT_RUNAS \
+	&& addgroup $DOCKER_MILT_RUNAS $DOCKER_AV_RUNAS \
+	&& ln -sf $DOCKER_MILT_LIB/.spamassassin /root/.spamassassin \
+	&& mkdir -p $DOCKER_MILT_LIB/.razor && chown $DOCKER_MILT_RUNAS: $DOCKER_MILT_LIB/.razor \
+	&& ln -sf $DOCKER_MILT_LIB/.razor /root/.razor \
+	&& chown $DOCKER_MILT_RUNAS: ${DOCKER_PERSIST_DIR}$DOCKER_DKIM_LIB \
+	&& chown $DOCKER_AV_RUNAS: ${DOCKER_PERSIST_DIR}$DOCKER_AV_LIB \
+	&& dc_addafter $DOCKER_MILT_FILE '^$mydomain' '$inet_socket_bind = \x27127.0.0.1\x27; # limit to ipv4 loopback, no ipv6 support' \
+	&& dc_addafter $DOCKER_MILT_FILE '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \
+	&& dc_addafter $DOCKER_MILT_FILE '^$log_templ' '# $sa_debug = 0; # debug SpamAssassin' \
+	&& dc_uncommentsection $DOCKER_MILT_FILE "# ### http://www.clamav.net/" \
+	&& dc_replace $DOCKER_MILT_FILE /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
+	&& dc_modify  $DOCKER_MILT_FILE '\$pid_file' = '"/run/amavis/amavisd.pid";' \
+	&& mkdir /run/amavis && chown $DOCKER_MILT_RUNAS: /run/amavis \
+	&& mkdir /run/clamav && chown $DOCKER_AV_RUNAS: /run/clamav \
+	&& dc_modify  $DOCKER_AVNGN_FILE Foreground yes \
+	&& dc_modify  $DOCKER_AVNGN_FILE LogSyslog yes \
+	&& dc_modify  $DOCKER_AVNGN_FILE LogFacility LOG_MAIL \
+	&& dc_comment $DOCKER_AVNGN_FILE LogFile \
+	&& dc_modify  $DOCKER_AVSIG_FILE Foreground yes \
+	&& dc_modify  $DOCKER_AVSIG_FILE LogSyslog yes \
+	&& dc_comment $DOCKER_AVSIG_FILE UpdateLogFile \
+	&& dc_modify  $DOCKER_AVSIG_FILE LogFacility LOG_MAIL \
+	&& source amavis-common.sh \
+	&& ac_amavis_setup_postfix

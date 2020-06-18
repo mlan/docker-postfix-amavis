@@ -1,0 +1,116 @@
+#!/bin/sh
+#
+# 10-amavis-common
+#
+# Define variables and functions used during container initialization.
+#
+# Defined in Dockerfile:
+# DOCKER_MILT_RUNAS
+#
+AMAVIS_CF=${AMAVIS_CF-$DOCKER_MILT_DIR/amavisd.conf}
+
+DOCKER_AMAVIS_ENVVAR="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BAD_HEADER_DESTINY SA_TAG_LEVEL_DEFLT SA_TAG2_LEVEL_DEFLT SA_KILL_LEVEL_DEFLT SA_DEBUG LOG_LEVEL"
+
+
+#
+# Apply envvars
+#
+
+amavis_apply_envvars() {
+	local env_vars="$(export -p | sed -r 's/export ([^=]+).*/\1/g')"
+	local lcase_var env_val
+	if dc_is_installed amavisd-new; then
+		for env_var in $env_vars; do
+			lcase_var="$(echo $env_var | tr '[:upper:]' '[:lower:]')"
+			if [ -z "${DOCKER_AMAVIS_ENVVAR##*$env_var*}" ]; then
+				env_val="$(eval echo \$$env_var)"
+				dc_log 5 "Setting amavis parameter $lcase_var = $env_val"
+				dc_modify $AMAVIS_CF '\$'$lcase_var = "$env_val;"
+			fi
+		done
+	fi
+}
+
+#
+# NOTE: the container only starts if either MAIL_DOMAIN or hostname is FQDN
+#
+amavis_setup_domains() {
+	local domains=${MAIL_DOMAIN-$(hostname -d)}
+	local domain_main=$(echo $domains | sed 's/\s.*//')
+	local domain_extra=$(echo $domains | sed 's/[^ ]* *//' | sed 's/[^ ][^ ]*/"&"/g' | sed 's/ /, /g')
+	if (dc_is_installed amavisd-new && [ -n "$domain_main" ]); then
+		dc_log 5 "Configuring amavis for domains $domains"
+		dc_modify $AMAVIS_CF '\$mydomain' = "'"$domain_main"';"
+		if [ $(echo $domains | wc -w) -gt 1 ]; then
+			dc_modify $AMAVIS_CF '@local_domains_maps' = '( [".$mydomain", '$domain_extra'] );'
+		fi
+	fi
+}
+
+amavis_setup_dkim() {
+	# generate and activate dkim domainkey.
+	# in case of multi domain generate key for first domain only, but accept it
+	# to be used for all domains specified.
+	local domains=${MAIL_DOMAIN-$(hostname -d)}
+	local domain_main=$(echo $domains | sed 's/\s.*//')
+	local user=$DOCKER_MILT_RUNAS
+	local bits=${DKIM_KEYBITS-2048}
+	local selector=${DKIM_SELECTOR}
+	local keyfile=$DOCKER_DKIM_LIB/$domain_main.$selector.privkey.pem
+	local txtfile=$DOCKER_DKIM_LIB/$domain_main.$selector._domainkey.txt
+	local keystring="$DKIM_PRIVATEKEY"
+	if (dc_is_installed amavisd-new && [ -n "$selector" ] && [ -n "$domain_main" ]); then
+		dc_log 5 "Setting dkim selector and domain to $selector and $domain_main"
+		# insert config statements just before last line
+		dc_cond_append -i $AMAVIS_CF '@dkim_signature_options_bysender_maps = ( { "." => { ttl => 21*24*3600, c => "relaxed/simple" } } );'
+		dc_cond_append -i $AMAVIS_CF 'dkim_key("'$domain_main'", "'$selector'", "'$keyfile'");'
+		if [ -n "$keystring" ]; then
+			if [ -e $keyfile ]; then
+				dc_log 4 "Overwriting private dkim key here $keyfile"
+			else
+				dc_log 5 "Writing private dkim key here $keyfile"
+			fi
+			if echo "$keystring" | grep "PRIVATE KEY" - > /dev/null; then
+				echo "$keystring" fold -w 64 > $keyfile
+			else
+				echo "-----BEGIN RSA PRIVATE KEY-----" > $keyfile
+				echo "$keystring" | fold -w 64 >> $keyfile
+				echo "-----END RSA PRIVATE KEY-----" >> $keyfile
+			fi
+		fi
+		if [ ! -e $keyfile ]; then
+			local message="$(amavisd genrsa $keyfile $bits 2>&1)"
+			dc_log 4 "$message"
+			amavisd showkeys $domain_main > $txtfile
+			#amavisd testkeys $domain_main
+		fi
+		dc_chowncond $user $DOCKER_DKIM_LIB
+	fi
+}
+
+#
+# Download rules for spamassassin at start up.
+# There is also an daily cron job that updates these.
+#
+amavis_update_spamassassin() {
+	if dc_is_installed spamassassin; then
+		dc_log 5 "Updating spamassassin rules"
+		( sa-update ) &
+	fi
+}
+
+#
+# Monitor Kopano spam dirs
+#
+amavis_monitor_spamd() {
+	if (dc_is_installed amavisd-new && [ -n "$DOCKER_SPAMD_DIR" ] && [ -d $DOCKER_SPAMD_DIR ]); then
+		local service
+		for watchdir in $DOCKER_SPAMD_DIR/*; do
+			if [ -d $watchdir ]; then
+				service="spamd-$(basename $watchdir)"
+				dc_log 5 "Setting up $service service"
+				setup-runit.sh "-n $service $(which inotifyd) $(which amavis-learn.sh) $watchdir:n"
+			fi
+		done
+	fi
+}

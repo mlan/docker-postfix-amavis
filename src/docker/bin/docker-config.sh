@@ -1,9 +1,11 @@
 #!/bin/sh
 #
-# docker-config.inc
+# docker-config.sh
 #
-# Define variables and functions used during container initialization here
-# and source this file in docker-entry.d and docker-exit.d files.
+# Defines common functions. Source this file from other scripts.
+#
+# Defined in Dockerfile:
+# DOCKER_UNLOCK_FILE
 #
 HOSTNAME=${HOSTNAME-$(hostname)}
 DOMAIN=${HOSTNAME#*.}
@@ -48,9 +50,6 @@ dc_addafter() {
 	local new="$(_escape $3)"
 	dc_log 7 '/'"$startline"'/!{p;d;}; $!N;s/\n\s*$/\n'"$new"'\n/g' $cfg_file
 	sed -i '/'"$startline"'/!{p;d;}; $!N;s/\n\s*$/\n'"$new"'\n/g' $cfg_file
-#	sed -ri '$!N;s/('"$startline"'.*\n)\s*$/\1\n'"$new"'\n/g;x;x' $cfg_file
-#	sed -ri 'N;s/('"$startline"'.*)\n\s*$/\1\n'"$new"'\n/g' $cfg_file
-#	sed -i '/'"$startline"'/a '"$new" $cfg_file
 }
 
 dc_comment() {
@@ -122,9 +121,8 @@ dc_persist_mvdirs() {
 }
 
 #
+# Conditionally change owner of files.
 #
-#
-
 dc_chowncond() {
 	local user=$1
 	local dir=$2
@@ -132,6 +130,36 @@ dc_chowncond() {
 		if [ -n "$(find $dir ! -user $user -print -exec chown -h $user: {} \;)" ]; then
 			dc_log 5 "Changed owner to $user for some files in $dir"
 		fi
+	fi
+}
+
+#
+# Append entry if it is not already there. If mode is -i then append before last line.
+#
+dc_cond_append() {
+	local mode filename lineraw lineesc
+	case $1 in
+		-i) mode=i; shift;;
+		-a) mode=a; shift;;
+		 *) mode=a;;
+	esac
+	filename=$1
+	shift
+	lineraw=$@
+	lineesc="$(echo $lineraw | sed 's/[\";/*]/\\&/g')"
+	if [ -e "$filename" ]; then
+		if [ -z "$(sed -n '/'"$lineesc"'/p' $filename)" ]; then
+			dc_log 7 "dc_cond_append append: $mode $filename $lineraw"
+			case $mode in
+				a) echo "$lineraw" >> $filename;;
+				i) sed -i "$ i\\$lineesc" $filename;;
+			esac
+		else
+			dc_log 4 "Avoiding duplication: $filename $lineraw"
+		fi
+	else
+		dc_log 7 "dc_cond_append create: $mode $filename $lineraw"
+		echo "$lineraw" >> $filename
 	fi
 }
 
@@ -154,9 +182,20 @@ dc_mvfile() {
 }
 
 #
+# Prune PID files
+#
+dc_prune_pidfiles() {
+	local dirs=$@
+	for dir in $dirs; do
+		if [ -n "$(find -H $dir -type f -name "*.pid" -exec rm {} \; 2>/dev/null)" ]; then
+			dc_log 5 "Removed orphan pid files in $dir"
+		fi
+	done
+}
+
+#
 # TLS/SSL Certificates [openssl]
 #
-
 dc_tls_setup_selfsigned_cert() {
 	local cert=$1
 	local key=$2
@@ -167,3 +206,19 @@ dc_tls_setup_selfsigned_cert() {
 			-days $TLS_CERTDAYS -key $key -out $cert
 	fi
 }
+
+#
+# Configuration Lock
+#
+dc_lock_config() {
+	if dc_is_unlocked; then
+		rm $DOCKER_UNLOCK_FILE
+	else
+		dc_log 5 "No unlock file found, so not touching configuration"
+	fi
+}
+
+#
+# true if there is no lock file or FORCE_CONFIG is not empty
+#
+dc_is_unlocked() { [ -f "$DOCKER_UNLOCK_FILE" ] || [ -n "$FORCE_CONFIG" ] ;}

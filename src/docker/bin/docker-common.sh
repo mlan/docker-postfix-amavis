@@ -83,3 +83,8 @@ dc_log_stamp() {
 		date +'%b %e %X '
 	fi
 }
+
+#
+# Tests
+#
+dc_is_installed() { apk -e info $1 &>/dev/null ;} # true if pkg is installed

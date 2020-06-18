@@ -36,7 +36,7 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 
 ## Tags
 
-The breaking.feature.fix [semantic versioning](https://semver.org/)
+The MAJOR.MINOR.PATCH [SemVer](https://semver.org/) is
 used. In addition to the three number version number you can use two or
 one number versions numbers, which refers to the latest version of the 
 sub series. The tag `latest` references the build based on the latest commit to the repository.
@@ -47,13 +47,15 @@ To exemplify the usage of the tags, lets assume that the latest version is `1.0.
 
 # Usage
 
-Often you want to configure Postfix and its components. There are different methods available to achieve this. You can use the environment variables described below set in the shell before creating the container. These environment variables can also be explicitly given on the command line when creating the container. They can also be given in an `docker-compose.yml` file, see below. Moreover docker volumes or host directories with desired configuration files can be mounted in the container. And finally you can `docker exec` into a running container and modify configuration files directly.
+Often you want to configure Postfix and its components. There are different methods available to achieve this. Many aspects can be configured using [environment variables](#environment-variables) described below. These environment variables can be explicitly given on the command line when creating the container. They can also be given in an `docker-compose.yml` file, see the [docker compose example](#docker-compose-example) below. Moreover docker volumes or host directories with desired configuration files can be mounted in the container. And finally you can `docker exec` into a running container and modify configuration files directly.
 
-If you want to test the image you can start it using the destination domain `example.com` and table mail boxes for info@example.com and abuse@example.com using the shell command below.
+You can start a `mlan/postfix-amavis` container using the destination domain `example.com` and table mail boxes for info@example.com and abuse@example.com by issuing the shell command below.
 
 ```bash
 docker run -d --name mta --hostname mx1.example.com -e MAIL_BOXES="info@example.com abuse@example.com" -p 127.0.0.1:25:25 mlan/postfix-amavis
 ```
+
+One convenient way to test the image is to clone the [github](https://github.com/mlan/docker-postfix-amavis) repository and run the [demo](#demo) therein, see below.
 
 ## Docker compose example
 
@@ -163,29 +165,37 @@ volumes:
   mta:
 ```
 
-This repository contains a [demo](demo) directory which hold the [docker-compose.yml](demo/docker-compose.yml) file as well as a [Makefile](demo/Makefile) which might come handy. From within the [demo](demo) directory you can start the containers by typing:
+## Demo
+
+This repository contains a [demo](demo) directory which hold the [docker-compose.yml](demo/docker-compose.yml) file as well as a [Makefile](demo/Makefile) which might come handy. Start with cloning the [github](https://github.com/mlan/docker-postfix-amavis) repository.
+
+```bash
+git clone https://github.com/mlan/docker-postfix-amavis.git
+```
+
+From within the [demo](demo) directory you can start the containers by typing:
 
 ```bash
 make init
 ```
 
-Then you can assess WebApp on the URL [`http://localhost:8080`](http://localhost:8080) and log in with the user name `demo` and password `demo` . You can send yourself a test email by typing:
+Then you can assess WebApp on the URL [`http://localhost:8080`](http://localhost:8080) and log in with the user name `demo` and password `demo` . 
+
+```bash
+make web
+```
+
+You can send yourself a test email by typing:
 
 ```bash
 make test
 ```
 
-## Environment variables
-
-When you create the `mlan/postfix-amavis` container, you can configure the services by passing one or more environment variables or arguments on the docker run command line. Once the services has been configured a lock file is created, to avoid repeating the configuration procedure when the container is restated. In the rare event that want to modify the configuration of an existing container you can override the default behavior by setting `FORCE_CONFIG` to a no-empty string.
-
-To see all available postfix configuration variables you can run `postconf` within the container, for example like this:
+When you are done testing you can destroy the test containers by typing
 
 ```bash
-docker exec -it mta postconf
+make destroy
 ```
-
-If you do, you will notice that configuration variable names are all lower case, but they will be matched with all uppercase environment variables by the container `entrypoint.sh` script.
 
 ## Persistent storage
 
@@ -196,6 +206,31 @@ To facilitate such approach, to achieve persistent storage, the configuration an
 ```
 docker run -d --name mta -v mta:/srv -p 127.0.0.1:25:25 mlan/postfix-amavis
 ```
+
+When you start a container which creates a new volume, as above, and the container has files or directories in the directory to be mounted (such as `/srv/` above), the directory’s contents are copied into the volume. The container then mounts and uses the volume, and other containers which use the volume also have access to the pre-populated content. More details [here](https://docs.docker.com/storage/volumes/#populate-a-volume-using-a-container).
+
+## Configuration / seeding procedure
+
+The `mlan/postfix-amavis` image contains an elaborate configuration / seeding procedure. The configuration is controlled by environment variables, described below.
+
+The seeding procedure will leave any existing configuration untouched. This is achieved by the using an unlock file: `DOCKER_UNLOCK_FILE=/srv/etc/.docker.unlock`.
+During the image build this file is created. When the the container is started the configuration / seeding procedure will be executed if the `DOCKER_UNLOCK_FILE` can be found. Once the procedure completes the unlock file is deleted preventing the configuration / seeding procedure to run when the container is restarted.
+
+The unlock file approach was selected since it is difficult to accidentally _create_ a file.
+
+In the rare event that want to modify the configuration of an existing container you can override the default behavior by setting `FORCE_CONFIG` to a no-empty string.
+
+## Environment variables
+
+When you create the `mlan/postfix-amavis` container, you can configure the services by passing one or more environment variables or arguments on the docker run command line. Once the services has been configured a lock file is created, to avoid repeating the configuration procedure when the container is restated.
+
+To see all available postfix configuration variables you can run `postconf` within the container, for example like this:
+
+```bash
+docker exec -it mta postconf
+```
+
+If you do, you will notice that configuration variable names are all lower case, but they will be matched with all uppercase environment variables by the container initialization scripts.
 
 ## Outgoing SMTP relay
 
@@ -241,7 +276,7 @@ use the host name of the container minus the first component. So you can either 
 
 ## Incoming TLS support
 
-Transport Layer Security (TLS, formerly called SSL) provides certificate-based authentication and encrypted sessions. An encrypted session protects the information that is transmitted with SMTP mail or with SASL authentication. 
+Transport Layer Security (TLS, formerly called SSL) provides certificate-based authentication and encrypted sessions. An encrypted session protects the information that is transmitted with SMTP mail or with SASL authentication.
 
 Here TLS is activated for inbound messages when either `SMTPD_TLS_CHAIN_FILES` or `SMTPD_TLS_CERT_FILE` (or its [DSA](https://en.wikipedia.org/wiki/Digital_Signature_Algorithm) and [ECDSA](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) counterparts) is not empty or `SMTPD_USE_TLS=yes`. The Postfix SMTP server generally needs a certificate and a private key to provide TLS. Both must be in [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format. The private key must not be encrypted, meaning: the key must be accessible without a password. The [RSA](https://en.wikipedia.org/wiki/RSA_(cryptosystem)) certificate and a private key files are identified by `SMTPD_TLS_CERT_FILE` and `SMTPD_TLS_KEY_FILE`.
 
@@ -365,9 +400,12 @@ amavisd-new is configured to check the digital signature of incoming email as we
 The bit length used when creating new keys. Default: `DKIM_KEYBITS=2048`
 
 #### `DKIM_SELECTOR`
+
 The public key DNS record should appear as a TXT resource record at: `DKIM_SELECTOR._domainkey.MAIL_DOMAIN`. The TXT record to be used with the private key generated at container creation is written here: `/var/db/dkim/MAIL_DOMAIN.DKIM_SELECTOR._domainkey.txt`.
 Default: `DKIM_SELECTOR=default`
+
 #### `DKIM_PRIVATEKEY`
+
 DKIM uses a private and public key pair used for signing and verifying email. A private key is created when the container is created. If you already have a private key you can pass it to the container by using the environment variable `DKIM_PRIVATEKEY`. For convenience the strings `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----` can be omitted form the key string. For example `DKIM_PRIVATEKEY="MIIEpAIBAAKCAQEA04up8hoqzS...1+APIB0RhjXyObwHQnOzhAk"`
 
 The private key is stored here `/var/db/dkim/MAIL_DOMAIN.DKIM_SELECTOR.privkey.pem`, so alternatively you can copy the private key into the container:
@@ -461,6 +499,8 @@ Separately, `LOG_LEVEL` and `SA_DEBUG` control the logging level of amavisd-new 
 `LOG_LEVEL` takes valued from 0 to 5 and `SA_DEBUG` is either 1 (activated) or 0 (deactivated). Note that these messages will only appear in the log if `SYSLOG_LEVEL` is 7 (debug).
 
 # Knowledge base
+
+Here some topics relevant for arranging a mail server are presented.
 
 ## DNS records
 

@@ -11,7 +11,6 @@
 #
 # Variables
 #
-
 DOCKER_ENTRY_DIR=${DOCKER_ENTRY_DIR-/etc/docker/entry.d}
 DOCKER_EXIT_DIR=${DOCKER_EXIT_DIR-/etc/docker/exit.d}
 DOCKER_RUNSV_DIR=${DOCKER_RUNSV_DIR-/etc/service}
@@ -21,7 +20,6 @@ DOCKER_RUNSV_DIR=${DOCKER_RUNSV_DIR-/etc/service}
 #
 source docker-common.sh
 source docker-config.sh
-source postfix-common.sh
 
 #
 # Functions
