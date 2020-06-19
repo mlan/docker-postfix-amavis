@@ -5,7 +5,7 @@
 # Defines common functions. Source this file from other scripts.
 #
 DOCKER_LOGLEVEL=${DOCKER_LOGLEVEL-5}
-DOCKER_LOGENTRY=${DOCKER_LOGENTRY-entrypoint.sh}
+DOCKER_LOGENTRY=${DOCKER_LOGENTRY-docker-entrypoint.sh}
 DOCKER_LOGUSAGE=${DOCKER_LOGUSAGE-usage}
 
 #

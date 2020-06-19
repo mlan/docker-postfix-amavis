@@ -44,7 +44,7 @@ ENV	DOCKER_ACME_SSL_DIR=$DOCKER_SSL_DIR/acme \
 	DOCKER_IMAPPASSWD_FILE=$DOCKER_IMAP_DIR/virt-passwd
 
 #
-# Copy utility scripts including entrypoint.sh to image
+# Copy utility scripts including docker-entrypoint.sh to image
 #
 
 COPY	src/*/bin $DOCKER_BIN_DIR/
@@ -53,49 +53,35 @@ COPY	src/*/entry.d $DOCKER_ENTRY_DIR/
 #
 # Install
 #
-# Configure Runit, a process manager
-#
-# Make postfix trust smtp clients on the same subnet, 
+# Arrange persistent directories at /srv.
+# Configure Runit, a process manager.
+# Make postfix trust smtp clients on the same subnet,
 # i.e., containers on the same network.
 #
 
-RUN	mkdir -p ${DOCKER_PERSIST_DIR}${DOCKER_SPOOL_DIR} \
-	${DOCKER_PERSIST_DIR}${DOCKER_CONF_DIR} \
-	${DOCKER_PERSIST_DIR}${DOCKER_ACME_SSL_DIR} \
-	${DOCKER_PERSIST_DIR}${DOCKER_APPL_SSL_DIR} \
-	${DOCKER_PERSIST_DIR}${DOCKER_MAIL_DIR} \
-	${DOCKER_PERSIST_DIR}${DOCKER_MAIL_LIB} \
-	${DOCKER_PERSIST_DIR}${DOCKER_IMAP_DIR} \
-	${DOCKER_PERSIST_DIR}${DOCKER_MILT_DIR} \
-	${DOCKER_PERSIST_DIR}${DOCKER_MILT_LIB} \
-	${DOCKER_PERSIST_DIR}${DOCKER_DKIM_LIB} \
-	${DOCKER_PERSIST_DIR}${DOCKER_AV_DIR} \
-	${DOCKER_PERSIST_DIR}${DOCKER_AV_LIB} \
-	${DOCKER_PERSIST_DIR}${DOCKER_SPAM_LIB} \
-	$DOCKER_SSL_DIR \
-	&& rmdir $DOCKER_MAIL_LIB \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_SPOOL_DIR} $DOCKER_SPOOL_DIR \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_CONF_DIR} $DOCKER_CONF_DIR \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_ACME_SSL_DIR} $DOCKER_ACME_SSL_DIR \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_APPL_SSL_DIR} $DOCKER_APPL_SSL_DIR \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_MAIL_DIR} $DOCKER_MAIL_DIR \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_MAIL_LIB} $DOCKER_MAIL_LIB \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_IMAP_DIR} $DOCKER_IMAP_DIR \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_MILT_DIR} $DOCKER_MILT_DIR \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_MILT_LIB} $DOCKER_MILT_LIB \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_DKIM_LIB} $DOCKER_DKIM_LIB \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_AV_DIR} $DOCKER_AV_DIR \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_AV_LIB} $DOCKER_AV_LIB \
-	&& ln -sf ${DOCKER_PERSIST_DIR}${DOCKER_SPAM_LIB} $DOCKER_SPAM_LIB \
+RUN	source docker-common.sh \
+	&& source docker-config.sh \
+	&& dc_persist_dirs \
+	$DOCKER_ACME_SSL_DIR \
+	$DOCKER_APPL_SSL_DIR \
+	$DOCKER_AV_DIR \
+	$DOCKER_AV_LIB \
+	$DOCKER_CONF_DIR \
+	$DOCKER_DKIM_LIB \
+	$DOCKER_IMAP_DIR \
+	$DOCKER_MAIL_DIR \
+	$DOCKER_MAIL_LIB \
+	$DOCKER_MILT_DIR \
+	$DOCKER_MILT_LIB \
+	$DOCKER_SPAM_LIB \
+	$DOCKER_SPOOL_DIR \
 	&& apk --no-cache --update add \
 	runit \
 	postfix \
 	postfix-ldap \
-#	&& if [ -n "$(apk search -x cyrus-sasl-plain)" ]; then apk add \
 	cyrus-sasl-plain \
 	cyrus-sasl-login \
-#	; fi \
-	&& setup-runit.sh \
+	&& docker-service.sh \
 	"syslogd -nO- -l$SYSLOG_LEVEL $SYSLOG_OPTIONS" \
 	"crond -f -c /etc/crontabs" \
 	"postfix start-fg" \
@@ -120,7 +106,7 @@ HEALTHCHECK CMD sv status ${DOCKER_RUNSV_DIR}/* && postfix status
 # Entrypoint, how container is run
 #
 
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 #
 # Have runit's runsvdir start all services
@@ -133,7 +119,7 @@ CMD	runsvdir -P ${DOCKER_RUNSV_DIR}
 #
 # target: base
 #
-# add dovecot
+# Install dovecot, a IMAP server
 #
 #
 
@@ -141,13 +127,14 @@ FROM	mini AS base
 
 #
 # Install
-# remove private key that dovecot creates
+#
+# Remove private key that dovecot creates.
 #
 
 RUN	apk --no-cache --update add \
 	dovecot \
 	jq \
-	&& setup-runit.sh "dovecot -F" \
+	&& docker-service.sh "dovecot -F" \
 	&& rm -f /etc/ssl/dovecot/* \
 	&& addgroup $DOCKER_APPL_RUNAS $DOCKER_IMAP_RUNAS \
 	&& addgroup $DOCKER_IMAP_RUNAS $DOCKER_APPL_RUNAS \
@@ -158,9 +145,7 @@ RUN	apk --no-cache --update add \
 #
 # target: full
 #
-# add anti-spam and anti-virus mail filters
-# as well as dkim and spf
-# add tzdata to allow time zone to be configured
+# Install anti-spam, anti-virus mail filters and dkim.
 #
 #
 
@@ -187,7 +172,7 @@ RUN	apk --no-cache --update add \
 	unrar \
 	p7zip \
 	ncurses \
-	&& setup-runit.sh \
+	&& docker-service.sh \
 	"amavisd foreground" \
 	"freshclam -d --quiet" \
 	"-q clamd" \

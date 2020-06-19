@@ -1,7 +1,10 @@
 # 2.0.0
 
-- [repo](src) Cut up monolithic configuration script (entrypoint.sh) into, easily reusable, modules.
-- [docker](src/docker/bin/entrypoint.sh) Now use entry.d and exit.d.
+- [repo](src) Cut up monolithic configuration script (docker-entrypoint.sh) into, easily reusable, modules.
+- [docker](src/docker/bin/docker-entrypoint.sh) Now use entry.d and exit.d.
+- [docker](src) Harmonize script names.
+- [docker](Dockerfile) Reintroduce `dc_persist_dirs()`.
+- [postfix](src/postfix) Reintroduce `doveadm_pw()` and `postfix_update_dhparam()`.
 - [docker](Dockerfile) Now use an unlock file, instead of a lock file, since it unlikely to accidentally *create* a file.
 - [docker](Dockerfile) Improved configurability of Dockerfile.
 - [docker](Dockerfile) Now use alpine:3.12 (postfix:3.5.2).
@@ -20,7 +23,7 @@
 
 # 1.3.7
 
-- [docker](src/docker/bin/entrypoint.sh) Added spamd-spam/ham service uses sa-learn for spam or ham.
+- [docker](src/docker/bin/docker-entrypoint.sh) Added spamd-spam/ham service uses sa-learn for spam or ham.
 - [docker](src/docker/bin/docker-common.sh) Consolidated logging functionality.
 - [repo](src) separate source code in by which service it belongs to.
 - [demo](demo) Activated kopano-spamd integration.
@@ -28,7 +31,7 @@
 # 1.3.6
 
 - [demo](demo) Use host timezone by mounting /etc/localtime.
-- [docker](src/docker/bin/entrypoint.sh) Always run `sa-update` at container start, otherwise amavisd refuses to start with new versions.
+- [docker](src/docker/bin/docker-entrypoint.sh) Always run `sa-update` at container start, otherwise amavisd refuses to start with new versions.
 - [docker](Dockerfile) Don't install tzdata, instead mount host's /etc/localtime.
 - [docker](ROADMAP.md) Config lock studied.
 
@@ -38,12 +41,12 @@
 
 # 1.3.4
 
-- Use refactored setup-runit.sh.
-- Fixed dumpcert.sh leaking to stdout. Have it write to logger instead.
+- Use refactored docker-service.sh.
+- Fixed acme-extract.sh leaking to stdout. Have it write to logger instead.
 - Fixed amavis-ls script that was broken.
 - Added section "Managing the quarantine" in README.md.
 - Health-check now tests all services.
-- In demo/Makefile added config, web, -diff, mail-mta-apk_list, mail-mta-quarantine_list, mail-mta-debugtools, mail-app-test_lmtp.
+- In demo/Makefile added config, web, -diff, mta-apk_list, mta-quarantine_list, mta-debugtools, app-test_lmtp.
 
 
 # 1.3.3

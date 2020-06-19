@@ -1,30 +1,8 @@
 # Road map
 
-## Entrypoint.d
+## /etc/docker/source.d
 
-Make these CLI functions available:
-- doveadm_pw()
-- update_postfix_dhparam()
-
-## Docker config lock
-
-Revisit the config lock. Now we depend on a single file. Feels unsafe.
-
-### SHA1
-
-Compute SHA1 for config folder (`DOCKER_LOCKDIR=/etc/postfix`) at build stage (`DOCKER_LOCKFILE=.lock.sha1`).
-At start-up
-1) The DOCKER_LOCKFILE has the same SHA; virgin dir, so run configuration.
-2) The DOCKER_LOCKFILE has different SHA; already configured, so don't touch it. There should always be a DOCKER_LOCKFILE if not, something is wrong so print error and do noting.
-
-```sh
-find $DOCKER_LOCKDIR/ f ! -name $DOCKER_LOCKFILE -print0 | sort -z | xargs -0 sha1sum | sha1sum
-```
-### DOCKER_UNLOCKFILE
-
-At build stage touch `DOCKER_UNLOCKFILE=/srv/etc/.unlock`. at startup: 1) there is a DOCKER_UNLOCKFILE or DOCKER_FORCE, run configuration and delete DOCKER_UNLOCKFILE. 2) no DOCKER_UNLOCKFILE, assume already configured, so don't touch it.
-
-This should be safer since it is difficult to accidentally _create_ a file.
+## docker-common.inc
 
 ## amavis-ls
 
@@ -38,13 +16,13 @@ Accommodate IMAP and POP3 configuration via environment variables in build targe
 
 Consider installing opendmarc once it is available in alpine/main (now in testing).
 Include in build target `full` in Dockerfile.
-Add configuration function in entrypoint.sh
+Add configuration function in docker-entrypoint.sh
 
 ## Pyzor
 
 Consider installing pyzor once it is available in alpine/main (now in testing).
 Include in build target `full` in Dockerfile.
-Add configuration function in entrypoint.sh
+Add configuration function in docker-entrypoint.sh
 
 ## Amavisd optimization
 

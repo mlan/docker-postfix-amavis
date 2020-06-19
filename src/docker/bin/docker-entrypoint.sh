@@ -4,7 +4,7 @@
 # This script need to run as PID 1 allowing it to receive signals from docker
 #
 # Usage: add the folowing lines in Dockerfile
-# ENTRYPOINT ["entrypoint.sh"]
+# ENTRYPOINT ["docker-entrypoint.sh"]
 # CMD runsvdir -P ${DOCKER_RUNSV_DIR}
 #
 

@@ -86,13 +86,32 @@ dc_uniquelines() {
 
 #
 # Make sure that we have the required directory structure in place under
-# DOCKER_PERSIST_DIR. It will be missing if we mount an empty volume there.
+# DOCKER_PERSIST_DIR.
 #
 dc_persist_mkdirs() {
 	local dirs=$@
 	for dir in $dirs; do
 		mkdir -p ${DOCKER_PERSIST_DIR}${dir}
 	done
+}
+
+#
+# Make sure that we have the required directory structure in place under
+# DOCKER_PERSIST_DIR.
+#
+dc_persist_dirs() {
+	local srcdirs="$@"
+	local dstdir
+	if [ -n "$DOCKER_PERSIST_DIR" ]; then
+		for srcdir in $srcdirs; do
+			mkdir -p "$srcdir"
+			dstdir="${DOCKER_PERSIST_DIR}${srcdir}"
+			mkdir -p "$(dirname $dstdir)"
+			mv -f "$srcdir" "$(dirname $dstdir)"
+			ln -sf "$dstdir" "$srcdir"
+			dc_log 5 "Moving $srcdir to $dstdir"
+		done
+	fi
 }
 
 #

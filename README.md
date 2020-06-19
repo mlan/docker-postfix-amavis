@@ -545,7 +545,7 @@ Here some implementation details are presented.
 
 The container use [runit](http://smarden.org/runit/), providing an init scheme and service supervision, allowing multiple services to be started.
 
-When the container is started, execution is handed over to the script [`entrypoint.sh`](src/docker/bin/entrypoint.sh). It has 4 stages; 0) *register* the SIGTERM [signal (IPC)](https://en.wikipedia.org/wiki/Signal_(IPC)) handler, which is programmed to run all exit scripts in `/etc/exitpoint.d/` and terminate all services, 1) *run* all entry scripts in `/etc/entrypoint.d/`, 2) *start* services registered in `/etc/service/`, 3) *wait* forever, allowing the signal handler to catch the SIGTERM and run the exit scripts and terminate all services.
+When the container is started, execution is handed over to the script [`docker-entrypoint.sh`](src/docker/bin/docker-entrypoint.sh). It has 4 stages; 0) *register* the SIGTERM [signal (IPC)](https://en.wikipedia.org/wiki/Signal_(IPC)) handler, which is programmed to run all exit scripts in `/etc/docker/exit.d/` and terminate all services, 1) *run* all entry scripts in `/etc/docker/entry.d/`, 2) *start* services registered in `/etc/service/`, 3) *wait* forever, allowing the signal handler to catch the SIGTERM and run the exit scripts and terminate all services.
 
 The entry scripts are responsible for tasks like, seeding configurations, register services and reading state files. These scripts are run before the services are started.
 

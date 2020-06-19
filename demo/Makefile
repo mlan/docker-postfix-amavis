@@ -115,6 +115,10 @@ mta-debugtools:
 mta-htop: mta-debugtools
 	docker-compose exec mta htop
 
+mta-encrypt:
+	$(eval secret := $(shell whiptail --backtitle "doveadm pw" --title "encrypt password" --inputbox "password" 8 78 secret 3>&1 1>&2 2>&3))
+	docker-compose exec mta doveadm pw -p $(secret)
+
 db-test:
 	docker-compose exec db mysqlshow -u $(MYSQL_USER) $(MYSQL_DATABASE) -p$(MYSQL_PASSWORD)
 

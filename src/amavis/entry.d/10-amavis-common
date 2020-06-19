@@ -109,7 +109,7 @@ amavis_monitor_spamd() {
 			if [ -d $watchdir ]; then
 				service="spamd-$(basename $watchdir)"
 				dc_log 5 "Setting up $service service"
-				setup-runit.sh "-n $service $(which inotifyd) $(which amavis-learn.sh) $watchdir:n"
+				docker-service.sh "-n $service $(which inotifyd) $(which amavis-learn.sh) $watchdir:n"
 			fi
 		done
 	fi

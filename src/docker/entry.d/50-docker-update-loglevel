@@ -16,5 +16,5 @@ else
 fi
 if [ -n "$loglevel" ]; then
 	dc_log 5 "Setting syslogd level=$loglevel."
-	setup-runit.sh "syslogd -nO- -l$loglevel $SYSLOG_OPTIONS"
+	docker-service.sh "syslogd -nO- -l$loglevel $SYSLOG_OPTIONS"
 fi

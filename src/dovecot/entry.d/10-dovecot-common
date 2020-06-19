@@ -46,3 +46,8 @@ dovecot_setup_postfix() {
 		fi
 	fi
 }
+
+#
+# Generate encrypted password.
+#
+doveadm_pw() { doveadm pw -p $1 ;}

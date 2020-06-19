@@ -224,3 +224,21 @@ postfix_activate_tls_cert() {
 		postconf -e smtpd_tls_auth_only=yes
 	fi
 }
+
+#
+# Optionally generate non-default Postfix SMTP server EDH parameters for improved security.
+# Note, since 2015, 512 bit export ciphers are no longer used this takes a long time.
+# Run this manually once the container is up by:
+# conf postfix_update_dhparam
+#
+postfix_update_dhparam() {
+	local bits=${1-2048}
+	if dc_is_installed openssl; then
+		dc_log 5 "Regenerating postfix edh $bits bit parameters"
+		mkdir -p $DOCKER_APPL_SSL_DIR
+		openssl dhparam -out $DOCKER_APPL_SSL_DIR/dh$bits.pem $bits
+		postconf smtpd_tls_dh1024_param_file=$DOCKER_APPL_SSL_DIR/dh$bits.pem
+	else
+		dc_log 4 "Cannot regenerate edh since openssl is not installed"
+	fi
+}

@@ -108,17 +108,17 @@ test-up_0:
 	#
 	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 	sleep $(TST_W8L1)
-	docker container logs $(TST_SRV) | grep 'entrypoint.sh'
+	docker container logs $(TST_SRV) | grep 'docker-entrypoint.sh'
 	docker stop $(TST_SRV)
 	sleep $(TST_W8S1)
 	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),base)
 	sleep $(TST_W8L1)
-	docker container logs $(TST_SRV) | grep 'entrypoint.sh'
+	docker container logs $(TST_SRV) | grep 'docker-entrypoint.sh'
 	docker stop $(TST_SRV)
 	sleep $(TST_W8S1)
 	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),full)
 	sleep $(TST_W8L1)
-	docker container logs $(TST_SRV) | grep 'entrypoint.sh'
+	docker container logs $(TST_SRV) | grep 'docker-entrypoint.sh'
 	docker stop $(TST_SRV)
 	sleep $(TST_W8S1)
 	#
@@ -254,7 +254,7 @@ test-mail_%: test-mail-send_% test-waits_% test-mail-read_%
 	#
 
 test-logs_%:
-	docker container logs $(TST_SRV) | grep 'entrypoint.sh' || true
+	docker container logs $(TST_SRV) | grep 'docker-entrypoint.sh' || true
 
 test-waits_%:
 	if [ $* -ge 5 ]; then sleep $(TST_W8S2); else sleep $(TST_W8S1); fi
