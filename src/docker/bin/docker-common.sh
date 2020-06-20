@@ -88,3 +88,15 @@ dc_log_stamp() {
 # Tests
 #
 dc_is_installed() { apk -e info $1 &>/dev/null ;} # true if pkg is installed
+
+#
+# Update loglevel
+#
+dc_update_loglevel() {
+	loglevel=${1-$SYSLOG_LEVEL}
+	if [ -n "$loglevel" ]; then
+		dc_log 5 "Setting syslogd level=$loglevel."
+		docker-service.sh "syslogd -nO- -l$loglevel $SYSLOG_OPTIONS"
+		[ -n "$DOCKER_RUNFUNC" ] && sv restart syslogd
+	fi
+}

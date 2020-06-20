@@ -28,7 +28,7 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 - Configuration using environment variables
 - Log directed to docker daemon with configurable level
 - Built in utility script `amavis-ls` which lists the contents of quarantine
-- Built in utility script `conf` helping configuring Postfix, AMaViS, SpamAssassin, Razor, ClamAV and Dovecot
+- Built in utility script `run` helping configuring Postfix, AMaViS, SpamAssassin, Razor, ClamAV and Dovecot
 - Makefile which can build images and do some management and testing
 - Health check
 - Small image size based on [Alpine Linux](https://alpinelinux.org/)
@@ -298,10 +298,10 @@ The term "Forward Secrecy" (or sometimes "Perfect Forward Secrecy") is used to d
 
 Forward secrecy is accomplished by negotiating session keys using per-session cryptographically-strong random numbers that are not saved, and signing the exchange with long-term authentication keys. Later disclosure of the long-term keys allows impersonation of the key holder from that point on, but not recovery of prior traffic, since with forward secrecy, the discarded random key agreement inputs are not available to the attacker.
 
-The built in utility script `conf` can be used to generate the Diffie-Hellman parameters needed for forward secrecy.
+The built in utility script `run` can be used to generate the Diffie-Hellman parameters needed for forward secrecy.
 
 ```bash
-docker exec -it mta conf update_postfix_dhparam
+docker exec -it mta run update_postfix_dhparam
 ```
 
 ### Let’s Encrypt LTS certificates using Traefik
@@ -325,10 +325,11 @@ Do not set `SMTPD_TLS_CERT_FILE` and/or `SMTPD_TLS_KEY_FILE` when using `ACME_FI
 [amavisd-new](https://www.amavis.org/) is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or [SpamAssassin](https://spamassassin.apache.org/). Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS block-lists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
 
 [Vipul's Razor](http://razor.sourceforge.net/) is a distributed, collaborative, spam detection and filtering network. It uses a fuzzy [checksum](http://en.wikipedia.org/wiki/Checksum) technique to identify
-message bodies based on signatures submitted by users, or inferred by 
-other techniques such as high-confidence Bayesian or DNSBL entries. 
+message bodies based on signatures submitted by users, or inferred by
+other techniques such as high-confidence Bayesian or DNSBL entries.
 
-AMaViS will only insert mail headers in incoming messages with domain mentioned in `MAIL_DOMAIN`. So proper configuration is needed for anti-spam and anti-virus to work.
+AMaViS will only insert mail headers in incoming messages with domain mentioned
+in `MAIL_DOMAIN`. So proper configuration is needed for anti-spam and anti-virus to work.
 
 #### `FINAL_VIRUS_DESTINY`, `FINAL_BANNED_DESTINY`, `FINAL_SPAM_DESTINY`, `FINAL_BAD_HEADER_DESTINY`
 
@@ -344,7 +345,7 @@ Default settings are: `FINAL_VIRUS_DESTINY=D_DISCARD`, `FINAL_BANNED_DESTINY=D_D
 
 #### `RAZOR_REGISTRATION`
 
-Razor, called by SpamAssassin, will check if the signature of the received email is registered in the Razor servers and adjust the spam score accordingly. Razor can also report detected spam to its servers, but then it needs to use a registered identity.
+Razor, called by SpamAssassin, will check if the signature of the received email is registered in the Razor servers and adjust the spam score accordingly. [Razor](https://cwiki.apache.org/confluence/display/SPAMASSASSIN/RazorAmavisd) can also report detected spam to its servers, but then it needs to use a registered identity.
 
 To register an identity with the Razor server, use `RAZOR_REGISTRATION`. You can request to be know as a certain user name, `RAZOR_REGISTRATION=username:passwd`. If you omit both user name and password, e.g., `RAZOR_REGISTRATION=:`, they will both be assigned to you by the Razor server. Likewise if password is omitted a password will be assigned by the Razor server. Razor users are encouraged
 to use their email addresses as their user name. Example: `RAZOR_REGISTRATION=postmaster@example.com:secret`
@@ -375,11 +376,13 @@ docker-compose exec mta amavisd-release <file>
 ## Kopano-spamd integration with [mlan/kopano](https://github.com/mlan/docker-kopano)
 
 [Kopano-spamd](https://kb.kopano.io/display/WIKI/Kopano-spamd) allow users to
-drag messages into the Junk folder triggering the anti-spam filter to learn it as spam. If the user moves the message back to the inbox,
-the anti-spam filter will unlearn it.
+drag messages into the Junk folder triggering the anti-spam filter to learn it
+as spam. If the user moves the message back to the inbox, the anti-spam filter
+will unlearn it.
 
-To allow kopano-spamd integration the kopano and postfix-amavis containers need to
-share the `/var/lib/kopano/spamd` folder. If this directory exists within the
+To allow kopano-spamd integration the kopano and postfix-amavis containers need
+to share the `KOPANO_SPAMD_LIB=/var/lib/kopano/spamd` folder.
+If this directory exists within the
 postfix-amavis container, the spamd-spam and spamd-ham service will be started.
 They will run `sa-learn --spam` or `sa-learn --ham`,
 respectively when a message is placed in either `var/lib/kopano/spamd/spam` or
@@ -543,9 +546,9 @@ Here some implementation details are presented.
 
 ## Container init scheme
 
-The container use [runit](http://smarden.org/runit/), providing an init scheme and service supervision, allowing multiple services to be started.
+The container use [runit](http://smarden.org/runit/), providing an init scheme and service supervision, allowing multiple services to be started. There is a Gentoo Linux [runit wiki](https://wiki.gentoo.org/wiki/Runit).
 
-When the container is started, execution is handed over to the script [`docker-entrypoint.sh`](src/docker/bin/docker-entrypoint.sh). It has 4 stages; 0) *register* the SIGTERM [signal (IPC)](https://en.wikipedia.org/wiki/Signal_(IPC)) handler, which is programmed to run all exit scripts in `/etc/docker/exit.d/` and terminate all services, 1) *run* all entry scripts in `/etc/docker/entry.d/`, 2) *start* services registered in `/etc/service/`, 3) *wait* forever, allowing the signal handler to catch the SIGTERM and run the exit scripts and terminate all services.
+When the container is started, execution is handed over to the script [`docker-entrypoint.sh`](src/docker/bin/docker-entrypoint.sh). It has 4 stages; 0) *register* the SIGTERM [signal (IPC)](https://en.wikipedia.org/wiki/Signal_(IPC)) handler, which is programmed to run all exit scripts in `/etc/docker/exit.d/` and terminate all services, 1) *run* all entry scripts in `/etc/docker/entry.d/`, 2) *start* services registered in `SVDIR=/etc/service/`, 3) *wait* forever, allowing the signal handler to catch the SIGTERM and run the exit scripts and terminate all services.
 
 The entry scripts are responsible for tasks like, seeding configurations, register services and reading state files. These scripts are run before the services are started.
 

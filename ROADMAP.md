@@ -1,8 +1,8 @@
 # Road map
 
-## /etc/docker/source.d
-
-## docker-common.inc
+## SVDIR
+DOCKER_RUNSV_DIR=/etc/service 
+Use SVDIR
 
 ## amavis-ls
 
@@ -12,17 +12,14 @@ Perhaps, implement something more interactive using dialog?
 
 Accommodate IMAP and POP3 configuration via environment variables in build target `base`
 
-## OpenDMARC
+## Additional Alpine packages
 
-Consider installing opendmarc once it is available in alpine/main (now in testing).
-Include in build target `full` in Dockerfile.
-Add configuration function in docker-entrypoint.sh
+Some potentially interesting Linux Alpine packages are now in testing.
+Consider installing them once they are available in Alpine/main.
+Such interesting packages include:
 
-## Pyzor
-
-Consider installing pyzor once it is available in alpine/main (now in testing).
-Include in build target `full` in Dockerfile.
-Add configuration function in docker-entrypoint.sh
+- OpenDMARC
+- Pyzor
 
 ## Amavisd optimization
 

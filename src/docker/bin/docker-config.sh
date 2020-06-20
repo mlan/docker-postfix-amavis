@@ -232,8 +232,9 @@ dc_tls_setup_selfsigned_cert() {
 dc_lock_config() {
 	if dc_is_unlocked; then
 		rm $DOCKER_UNLOCK_FILE
+		dc_log 5 "Removing unlock file, locking the configuration."
 	else
-		dc_log 5 "No unlock file found, so not touching configuration"
+		dc_log 5 "No unlock file found, so not touching configuration."
 	fi
 }
 

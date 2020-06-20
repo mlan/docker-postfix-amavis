@@ -49,6 +49,7 @@ sv_down() { sv down ${DOCKER_RUNSV_DIR}/* ;}
 # use exit code 143 = 128 + 15 -- SIGTERM
 #
 term_trap() {
+	dc_log 4 "Got SIGTERM, so shutting down."
 	run_parts "$DOCKER_EXIT_DIR"
 	sv_down
 	exit 143
@@ -60,7 +61,7 @@ term_trap() {
 #
 
 exec 2>&1
-trap 'kill ${!}; term_trap' SIGTERM
+trap 'kill $!; term_trap' SIGTERM
 
 #
 # Stage 1) run all entry scripts in $DOCKER_ENTRY_DIR
@@ -79,5 +80,5 @@ run_parts "$DOCKER_ENTRY_DIR"
 # Stage 3) wait forever so we can catch the SIGTERM
 #
 while true; do
-	tail -f /dev/null & wait ${!}
+	tail -f /dev/null & wait $!
 done

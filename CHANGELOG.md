@@ -3,6 +3,11 @@
 - [repo](src) Cut up monolithic configuration script (docker-entrypoint.sh) into, easily reusable, modules.
 - [docker](src/docker/bin/docker-entrypoint.sh) Now use entry.d and exit.d.
 - [docker](src) Harmonize script names.
+- [docker](src/docker) Now use 80-docker-lock-config.
+- [docker](src/docker) Reintroduce dynamic updates of the loglevel.
+- [docker](src/docker) Renamed utility script `run` preciouly called `conf`.
+- [amavis](src/amavis) Reintroduce `amavis_register_razor()`.
+- [amavis](src/amavis) make spamassassin use razor.
 - [docker](Dockerfile) Reintroduce `dc_persist_dirs()`.
 - [postfix](src/postfix) Reintroduce `doveadm_pw()` and `postfix_update_dhparam()`.
 - [docker](Dockerfile) Now use an unlock file, instead of a lock file, since it unlikely to accidentally *create* a file.

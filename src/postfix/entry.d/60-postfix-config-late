@@ -3,7 +3,7 @@
 # 60-postfix-config-late
 #
 # Functions defined in:
-# 10-postfix-common
+# docker-config.sh 10-postfix-common
 #
 #
 
@@ -22,4 +22,3 @@ if dc_is_unlocked; then
 	postfix_activate_tls_cert
 	postfix_apply_envvars
 fi
-dc_lock_config

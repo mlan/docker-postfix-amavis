@@ -5,12 +5,13 @@
 # Define variables and functions used during container initialization.
 #
 # Defined in Dockerfile:
-# DOCKER_MILT_RUNAS
+# DOCKER_MILT_RUNAS DOCKER_MILT_LIB
 #
 AMAVIS_CF=${AMAVIS_CF-$DOCKER_MILT_DIR/amavisd.conf}
 
 DOCKER_AMAVIS_ENVVAR="FINAL_VIRUS_DESTINY FINAL_BANNED_DESTINY FINAL_SPAM_DESTINY FINAL_BAD_HEADER_DESTINY SA_TAG_LEVEL_DEFLT SA_TAG2_LEVEL_DEFLT SA_KILL_LEVEL_DEFLT SA_DEBUG LOG_LEVEL"
 
+KOPANO_SPAMD_LIB=${KOPANO_SPAMD_LIB-/var/lib/kopano/spamd}
 
 #
 # Apply envvars
@@ -100,12 +101,41 @@ amavis_update_spamassassin() {
 }
 
 #
-# Monitor Kopano spam dirs
+# Create a razor conf file and discover razor servers.
+#
+amavis_register_razor() {
+	local auth="${1-$RAZOR_REGISTRATION}"
+	auth=${auth//:/ }
+	set -- $auth
+	local user=$1
+	local pass=$2
+	local razor_home=$DOCKER_MILT_LIB/.razor
+	if dc_is_installed razor; then
+		dc_log 5 "Discovering razor servers"
+		razor-admin -home=$razor_home -create
+		razor_discovery_server=$(head -n1 $razor_home/servers.discovery.lst)
+		if ([ -n "$auth" ] && [ ! -e $DOCKER_MILTDB_LIB/identity ]); then
+			# register an identity if RAZOR_REGISTRATION is not empty
+			[ -n "$user" ] && user="-user=$user"
+			[ -n "$pass" ] && pass="-pass=$pass"
+			if ping -c1 $razor_discovery_server >/dev/null 2>&1; then
+				local message="$(razor-admin -home=$razor_home $user $pass -register)"
+				dc_log 5 "$message"
+			else
+				dc_log 4 "Not registering razor, cannot ping $razor_discovery_server"
+			fi
+		fi
+		dc_chowncond $DOCKER_MILT_RUNAS $razor_home
+	fi
+}
+
+#
+# Monitor Kopano spam dirs KOPANO_SPAMD_LIB
 #
 amavis_monitor_spamd() {
-	if (dc_is_installed amavisd-new && [ -n "$DOCKER_SPAMD_DIR" ] && [ -d $DOCKER_SPAMD_DIR ]); then
+	if (dc_is_installed amavisd-new && [ -n "$KOPANO_SPAMD_LIB" ] && [ -d $KOPANO_SPAMD_LIB ]); then
 		local service
-		for watchdir in $DOCKER_SPAMD_DIR/*; do
+		for watchdir in $KOPANO_SPAMD_LIB/*; do
 			if [ -d $watchdir ]; then
 				service="spamd-$(basename $watchdir)"
 				dc_log 5 "Setting up $service service"

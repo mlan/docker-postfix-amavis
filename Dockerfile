@@ -20,7 +20,7 @@ ENV	DOCKER_RUNSV_DIR=/etc/service \
 	DOCKER_SSL_DIR=/etc/ssl \
 	DOCKER_SPOOL_DIR=/var/spool/postfix \
 	DOCKER_CONF_DIR=/etc/postfix \
-	DOCKER_MAIL_DIR=/etc/mail \
+	DOCKER_SPAM_DIR=/etc/mail/spamassassin \
 	DOCKER_MAIL_LIB=/var/mail \
 	DOCKER_IMAP_DIR=/etc/dovecot \
 	DOCKER_MILT_DIR=/etc/amavis \
@@ -39,8 +39,10 @@ ENV	DOCKER_RUNSV_DIR=/etc/service \
 ENV	DOCKER_ACME_SSL_DIR=$DOCKER_SSL_DIR/acme \
 	DOCKER_APPL_SSL_DIR=$DOCKER_SSL_DIR/postfix \
 	DOCKER_MILT_FILE=$DOCKER_MILT_DIR/amavisd.conf \
+#	DOCKER_MILTDB_LIB=$DOCKER_MILT_LIB/.razor \
 	DOCKER_AVNGN_FILE=$DOCKER_AV_DIR/clamd.conf \
 	DOCKER_AVSIG_FILE=$DOCKER_AV_DIR/freshclam.conf \
+	DOCKER_SPAM_FILE=$DOCKER_SPAM_DIR/local.cf \
 	DOCKER_IMAPPASSWD_FILE=$DOCKER_IMAP_DIR/virt-passwd
 
 #
@@ -69,7 +71,7 @@ RUN	source docker-common.sh \
 	$DOCKER_CONF_DIR \
 	$DOCKER_DKIM_LIB \
 	$DOCKER_IMAP_DIR \
-	$DOCKER_MAIL_DIR \
+	$DOCKER_SPAM_DIR \
 	$DOCKER_MAIL_LIB \
 	$DOCKER_MILT_DIR \
 	$DOCKER_MILT_LIB \
@@ -183,7 +185,7 @@ RUN	apk --no-cache --update add \
 	&& addgroup $DOCKER_AV_RUNAS $DOCKER_MILT_RUNAS \
 	&& addgroup $DOCKER_MILT_RUNAS $DOCKER_AV_RUNAS \
 	&& ln -sf $DOCKER_MILT_LIB/.spamassassin /root/.spamassassin \
-	&& mkdir -p $DOCKER_MILT_LIB/.razor && chown $DOCKER_MILT_RUNAS: $DOCKER_MILT_LIB/.razor \
+#	&& mkdir -p $DOCKER_MILTDB_LIB && chown $DOCKER_MILT_RUNAS: $DOCKER_MILTDB_LIB \
 	&& ln -sf $DOCKER_MILT_LIB/.razor /root/.razor \
 	&& chown $DOCKER_MILT_RUNAS: ${DOCKER_PERSIST_DIR}$DOCKER_DKIM_LIB \
 	&& chown $DOCKER_AV_RUNAS: ${DOCKER_PERSIST_DIR}$DOCKER_AV_LIB \
@@ -191,8 +193,9 @@ RUN	apk --no-cache --update add \
 	&& dc_addafter $DOCKER_MILT_FILE '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \
 	&& dc_addafter $DOCKER_MILT_FILE '^$log_templ' '# $sa_debug = 0; # debug SpamAssassin' \
 	&& dc_uncommentsection $DOCKER_MILT_FILE "# ### http://www.clamav.net/" \
-	&& dc_replace $DOCKER_MILT_FILE /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
-	&& dc_modify  $DOCKER_MILT_FILE '\$pid_file' = '"/run/amavis/amavisd.pid";' \
+	&& dc_replace  $DOCKER_MILT_FILE /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
+	&& dc_modify   $DOCKER_MILT_FILE '\$pid_file' = '"/run/amavis/amavisd.pid";' \
+	&& dc_addafter $DOCKER_SPAM_FILE 'lock_method' 'use_razor2 1' \
 	&& mkdir /run/amavis && chown $DOCKER_MILT_RUNAS: /run/amavis \
 	&& mkdir /run/clamav && chown $DOCKER_AV_RUNAS: /run/clamav \
 	&& dc_modify  $DOCKER_AVNGN_FILE Foreground yes \

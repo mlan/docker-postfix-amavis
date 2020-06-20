@@ -94,7 +94,7 @@ mta-test:
 	| nc -C localhost 25
 
 mta-razor:
-	docker-compose exec mta conf cntcfg_razor_register
+	docker-compose exec mta run amavis_register_razor
 
 mta-apk_list:
 	docker-compose exec mta /bin/sh -c 'for pkg in $$(apk info 2>/dev/null); do printf "%9s  %s\n" $$(apk info -s $$pkg 2>/dev/null | sed -n "2{p;q}") $$pkg; done | sort'

@@ -14,7 +14,7 @@ if dc_is_unlocked; then
 	amavis_setup_domains
 	amavis_setup_dkim
 	amavis_apply_envvars
-#	dp_razor_register
+	amavis_register_razor
 fi
 amavis_update_spamassassin
 amavis_monitor_spamd
