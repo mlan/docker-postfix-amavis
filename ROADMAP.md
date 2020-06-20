@@ -1,9 +1,5 @@
 # Road map
 
-## SVDIR
-DOCKER_RUNSV_DIR=/etc/service 
-Use SVDIR
-
 ## amavis-ls
 
 Perhaps, implement something more interactive using dialog?

@@ -61,7 +61,7 @@ $(addsuffix -env,$(srv_list)):
 	docker-compose exec $(patsubst %-env,%,$@) env
 
 $(addsuffix -sv,$(srv_list)):
-	docker-compose exec $(patsubst %-sv,%,$@) sh -c 'sv status $$DOCKER_RUNSV_DIR/*'
+	docker-compose exec $(patsubst %-sv,%,$@) sh -c 'sv status $$SVDIR/*'
 
 $(addsuffix -diff,$(srv_list)):
 	docker container diff $(COMPOSE_PROJECT_NAME)_$(patsubst %-diff,%,$@)_1

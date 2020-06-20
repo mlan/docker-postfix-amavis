@@ -13,7 +13,7 @@ ARG	REL=latest
 FROM	$DIST:$REL AS mini
 LABEL	maintainer=mlan
 
-ENV	DOCKER_RUNSV_DIR=/etc/service \
+ENV	SVDIR=/etc/service \
 	DOCKER_PERSIST_DIR=/srv \
 	DOCKER_BIN_DIR=/usr/local/bin \
 	DOCKER_ENTRY_DIR=/etc/docker/entry.d \
@@ -102,7 +102,7 @@ EXPOSE 25 465 587
 # Rudimentary healthcheck
 #
 
-HEALTHCHECK CMD sv status ${DOCKER_RUNSV_DIR}/* && postfix status
+HEALTHCHECK CMD sv status ${SVDIR}/* && postfix status
 
 #
 # Entrypoint, how container is run
@@ -114,7 +114,7 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 # Have runit's runsvdir start all services
 #
 
-CMD	runsvdir -P ${DOCKER_RUNSV_DIR}
+CMD	runsvdir -P ${SVDIR}
 
 
 #

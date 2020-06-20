@@ -5,7 +5,7 @@
 #
 # Usage: add the folowing lines in Dockerfile
 # ENTRYPOINT ["docker-entrypoint.sh"]
-# CMD runsvdir -P ${DOCKER_RUNSV_DIR}
+# CMD runsvdir -P ${SVDIR}
 #
 
 #
@@ -13,7 +13,7 @@
 #
 DOCKER_ENTRY_DIR=${DOCKER_ENTRY_DIR-/etc/docker/entry.d}
 DOCKER_EXIT_DIR=${DOCKER_EXIT_DIR-/etc/docker/exit.d}
-DOCKER_RUNSV_DIR=${DOCKER_RUNSV_DIR-/etc/service}
+SVDIR=${SVDIR-/etc/service}
 
 #
 # source common functions
@@ -41,7 +41,7 @@ run_parts() {
 # If both files ./run and ./finish exits, execute ./finish.
 # After it stops, do not restart the service.
 #
-sv_down() { sv down ${DOCKER_RUNSV_DIR}/* ;}
+sv_down() { sv down ${SVDIR}/* ;}
 
 #
 # SIGTERM handler
@@ -71,7 +71,7 @@ run_parts "$DOCKER_ENTRY_DIR"
 
 #
 # Stage 2) run provided arguments in the background
-# Start services with: runsvdir -P ${DOCKER_RUNSV_DIR}
+# Start services with: runsvdir -P ${SVDIR}
 #
 
 "$@" &

@@ -4,8 +4,8 @@
 #
 source docker-common.sh
 
-# use /etc/service if $DOCKER_RUNSV_DIR not already defined
-DOCKER_RUNSV_DIR=${DOCKER_RUNSV_DIR-/etc/service}
+# use /etc/service if $SVDIR not already defined
+SVDIR=${SVDIR-/etc/service}
 DOCKER_SVLOG_DIR=${DOCKER_SVLOG_DIR-/var/log/sv}
 DOCKER_RUN_DIR=${DOCKER_RUN_DIR-/var/run}
 
@@ -75,7 +75,7 @@ init_service() {
 	shift $((OPTIND -1))
 	cmd=$(which "$1")
 	sv_name=${sv_name-$(base_name $1)}
-	runsv_dir=$DOCKER_RUNSV_DIR/$sv_name
+	runsv_dir=$SVDIR/$sv_name
 	svlog_dir=$DOCKER_SVLOG_DIR/$sv_name
 	if [ -n "$sv_force" ]; then
 		forcepid="$(echo rm -f $(pid_name $sv_name)*)"

@@ -330,10 +330,10 @@ test-diff-srv:
 	docker container diff $(TST_SRV)
 
 test-sv-clt:
-	docker exec -it $(TST_CLT) sh -c 'sv status $$DOCKER_RUNSV_DIR/*'
+	docker exec -it $(TST_CLT) sh -c 'sv status $$SVDIR/*'
 
 test-sv-srv:
-	docker exec -it $(TST_SRV) sh -c 'sv status $$DOCKER_RUNSV_DIR/*'
+	docker exec -it $(TST_SRV) sh -c 'sv status $$SVDIR/*'
 
 test-regen-edh-srv:
 	docker exec -it $(TST_SRV) conf update_postfix_dhparam
