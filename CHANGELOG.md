@@ -1,4 +1,4 @@
-# 2.0.0
+# 1.4.0
 
 - [repo](src) Cut up monolithic configuration script (docker-entrypoint.sh) into, easily reusable, modules.
 - [docker](src/docker/bin/docker-entrypoint.sh) Now use entry.d and exit.d.

@@ -39,7 +39,6 @@ ENV	SVDIR=/etc/service \
 ENV	DOCKER_ACME_SSL_DIR=$DOCKER_SSL_DIR/acme \
 	DOCKER_APPL_SSL_DIR=$DOCKER_SSL_DIR/postfix \
 	DOCKER_MILT_FILE=$DOCKER_MILT_DIR/amavisd.conf \
-#	DOCKER_MILTDB_LIB=$DOCKER_MILT_LIB/.razor \
 	DOCKER_AVNGN_FILE=$DOCKER_AV_DIR/clamd.conf \
 	DOCKER_AVSIG_FILE=$DOCKER_AV_DIR/freshclam.conf \
 	DOCKER_SPAM_FILE=$DOCKER_SPAM_DIR/local.cf \
@@ -185,7 +184,6 @@ RUN	apk --no-cache --update add \
 	&& addgroup $DOCKER_AV_RUNAS $DOCKER_MILT_RUNAS \
 	&& addgroup $DOCKER_MILT_RUNAS $DOCKER_AV_RUNAS \
 	&& ln -sf $DOCKER_MILT_LIB/.spamassassin /root/.spamassassin \
-#	&& mkdir -p $DOCKER_MILTDB_LIB && chown $DOCKER_MILT_RUNAS: $DOCKER_MILTDB_LIB \
 	&& ln -sf $DOCKER_MILT_LIB/.razor /root/.razor \
 	&& chown $DOCKER_MILT_RUNAS: ${DOCKER_PERSIST_DIR}$DOCKER_DKIM_LIB \
 	&& chown $DOCKER_AV_RUNAS: ${DOCKER_PERSIST_DIR}$DOCKER_AV_LIB \
