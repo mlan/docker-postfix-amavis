@@ -10,6 +10,7 @@
 - [amavis](src/amavis) Reintroduce `amavis_register_razor()`.
 - [amavis](src/amavis) make spamassassin use razor.
 - [docker](Dockerfile) Reintroduce `dc_persist_dirs()`.
+- [docker](Dockerfile) Revert back to `DOCKER_DKIM_LIB=/var/db/dkim`.
 - [postfix](src/postfix) Reintroduce `doveadm_pw()` and `postfix_update_dhparam()`.
 - [docker](Dockerfile) Now use an unlock file, instead of a lock file, since it unlikely to accidentally *create* a file.
 - [docker](Dockerfile) Improved configurability of Dockerfile.
