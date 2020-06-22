@@ -147,5 +147,8 @@ app-show_user1:
 app-show_user2: app-debugtools
 	docker-compose exec app ldapsearch -H ldap://auth:389 -xLLL -b $(LDAP_BASE) '*'
 
+app-show_sync:
+	docker-compose exec app z-push-top
+
 app-create_store:
 	docker-compose exec app kopano-admin --create-store $(LDAP_TEST_USER)

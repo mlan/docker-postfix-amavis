@@ -1,6 +1,8 @@
 # 1.4.0
 
 - [repo](src) Cut up monolithic configuration script (docker-entrypoint.sh) into, easily reusable, modules.
+- [repo](.travis.yml) Revisited `.travis.yml`.
+- [repo](src) Revisited `src/module/bin` script names.
 - [docker](src/docker/bin/docker-entrypoint.sh) Now use entry.d and exit.d.
 - [docker](src) Harmonize script names.
 - [docker](src/docker) Use the native envvar `SVDIR` instead of `DOCKER_RUNSV_DIR`.
@@ -11,21 +13,20 @@
 - [amavis](src/amavis) make spamassassin use razor.
 - [docker](Dockerfile) Reintroduce `dc_persist_dirs()`.
 - [docker](Dockerfile) Revert back to `DOCKER_DKIM_LIB=/var/db/dkim`.
-- [postfix](src/postfix) Reintroduce `doveadm_pw()` and `postfix_update_dhparam()`.
 - [docker](Dockerfile) Now use an unlock file, instead of a lock file, since it unlikely to accidentally *create* a file.
 - [docker](Dockerfile) Improved configurability of Dockerfile.
 - [docker](Dockerfile) Now use alpine:3.12 (postfix:3.5.2).
 - [docker](src/docker) Moved function dc_is_installed() into docker-common.sh.
+- [docker](src/docker/bin/docker-common.sh) Fixed minor issue in logging functionality.
 - [acme](src/acme) Added module providing Let's encrypt TLS certificates using ACME.
 - [acme](src/acme/bin/acme-extract.sh) Support both v1 and v2 formats of the acme.json file.
 - [acme](src/acme/entry.d/50-acme-monitor-tlscert) Support both host and domain wildcard TLS certificates.
 - [amavis](src/amavis) Added module providing amavis configuration.
 - [dovecot](src/dovecot) Added module providing dovecot configuration.
+- [postfix](src/postfix) Reintroduce `doveadm_pw()` and `postfix_update_dhparam()`.
 - [postfix](src/postfix) Added module providing postfix configuration.
-- [docker](src/docker/bin/docker-common.sh) Fixed minor issue in logging functionality.
 - [demo](demo) Made service names shorter.
-- [repo](.travis.yml) Revisited `.travis.yml`.
-- [repo](src) Revisited `src/module/bin` script names.
+- [demo](demo/Makefile) Add app-show_sync.
 - [test](test) Cleaned up test directory and files.
 
 # 1.3.7
@@ -54,7 +55,6 @@
 - Added section "Managing the quarantine" in README.md.
 - Health-check now tests all services.
 - In demo/Makefile added config, web, -diff, mta-apk_list, mta-quarantine_list, mta-debugtools, app-test_lmtp.
-
 
 # 1.3.3
 
