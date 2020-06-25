@@ -1,3 +1,8 @@
+# 1.4.1
+
+- [acme](src/acme) Remove all certs and keys when `ACME_FILE=/acme/acme.json` is updated. Otherwize we might pick old certificates in error.
+- [acme](src/acme) Introduce `ACME_POSTHOOK="postfix reload"` and run that after we have updated the certificates.
+
 # 1.4.0
 
 - [repo](src) Cut up monolithic configuration script (docker-entrypoint.sh) into, easily reusable, modules.

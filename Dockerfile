@@ -34,6 +34,7 @@ ENV	SVDIR=/etc/service \
 	DOCKER_IMAP_RUNAS=dovecot \
 	DOCKER_MILT_RUNAS=amavis \
 	DOCKER_AV_RUNAS=clamav \
+	ACME_POSTHOOK="postfix reload" \
 	SYSLOG_LEVEL=5 \
 	SYSLOG_OPTIONS=-SDt
 ENV	DOCKER_ACME_SSL_DIR=$DOCKER_SSL_DIR/acme \
@@ -89,7 +90,7 @@ RUN	source docker-common.sh \
 	&& chown ${DOCKER_APPL_RUNAS}: ${DOCKER_PERSIST_DIR}$DOCKER_MAIL_LIB \
 	&& mv $DOCKER_CONF_DIR/aliases $DOCKER_CONF_DIR/aliases.dist \
 	&& postconf -e mynetworks_style=subnet \
-	&& echo "Allow configuration phase." > $DOCKER_UNLOCK_FILE
+	&& echo "This file ulocks the configuration, so it will be deleted after initialization." > $DOCKER_UNLOCK_FILE
 
 #
 # state standard smtp, smtps and submission ports

@@ -144,9 +144,18 @@ read_domains() {
 	fi
 }
 
+#
+# Remove old certs.
+#
+remove_certs() {
+	rm -f ${cdir}/*
+	rm -r ${pdir}/*
+}
+#
+# Traefik stores a cert bundle for each domain.  Within this cert
+# bundle there is both proper the certificate and the Let's Encrypt CA
+#
 save_certs() {
-	# Traefik stores a cert bundle for each domain.  Within this cert
-	# bundle there is both proper the certificate and the Let's Encrypt CA
 	dc_log 5 "Extracting private keys and cert bundles in ${acmefile}"
 	case $acmeversion in
 		1)
@@ -166,7 +175,40 @@ save_certs() {
 	done
 }
 
+#
+# NOT USED
+#
+# update_dir src_dir dst_dir
+# 1) Remove files only in dst_dir.
+# 2) Copy files only in src_dir to dst_dir.
+# 3) Copy differing files to dst_dir.
+#
+update_dir() {
+	local src_dir=$1
+	local dst_dir=$2
+	local diff_result="$(diff -rq $src_dir $dst_dir)"
+	local dst_only="$(echo $diff_result | sed -rn 's/Only in ('$dst_dir'): ([^ ]+)/\1\/\2/p')"
+	local src_only="$(echo $diff_result | sed -rn 's/Only in ('$src_dir'): ([^ ]+)/\1\/\2/p')"
+	local src_diff="$(echo $diff_result | sed -rn 's/Files ('$src_dir'[^ ]+) .*/\1/p')"
+	rm $dst_only
+	for file in $src_only; do
+		cp $file $dst_dir
+	done
+	for file in $src_diff; do
+		cp -f $file $dst_dir
+	done
+	rm -f $src_dir/*
+}
 
+#
+# Run command in ACME_POSTHOOK if it contain a valid command and runsvdir is running.
+#
+run_posthook() {
+	if (pidof runsvdir >/dev/null && [ -n "$ACME_POSTHOOK" ] && command -v $ACME_POSTHOOK >/dev/null); then
+		local out="$($ACME_POSTHOOK 2>&1)"
+		[ -n "$out" ] && dc_log 7 "$ACME_POSTHOOK : $out"
+	fi
+}
 #
 # run
 #
@@ -178,4 +220,6 @@ read_letsencryptkey
 make_certdirs
 save_letsencryptkey
 read_domains
+remove_certs
 save_certs
+run_posthook

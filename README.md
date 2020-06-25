@@ -47,7 +47,7 @@ To exemplify the usage of the tags, lets assume that the latest version is `1.0.
 
 # Usage
 
-Often you want to configure Postfix and its components. There are different methods available to achieve this. Many aspects can be configured using [environment variables](#environment-variables) described below. These environment variables can be explicitly given on the command line when creating the container. They can also be given in an `docker-compose.yml` file, see the [docker compose example](#docker-compose-example) below. Moreover docker volumes or host directories with desired configuration files can be mounted in the container. And finally you can `docker exec` into a running container and modify configuration files directly.
+Often you want to configure Postfix and its components. There are different methods available to achieve this. Many aspects can be configured using [environment variables](#environment-variables) described below. These environment variables can be explicitly given on the command line when creating the container. They can also be given in an `docker-compose.yml` file, see the [docker compose example](#docker-compose-example) below. Moreover docker volumes or host directories with desired configuration files can be mounted in the container. And finally you can `docker exec` into a running container and modify configuration files directly.
 
 You can start a `mlan/postfix-amavis` container using the destination domain `example.com` and table mail boxes for info@example.com and abuse@example.com by issuing the shell command below.
 
@@ -308,11 +308,13 @@ docker exec -it mta run update_postfix_dhparam
 
 Let’s Encrypt provide free, automated, authorized certificates when you can demonstrate control over your domain. Automatic Certificate Management Environment (ACME) is the protocol used for such demonstration. There are many agents and applications that supports ACME, e.g., [certbot](https://certbot.eff.org/). The reverse proxy [Traefik](https://docs.traefik.io/) also supports ACME.
 
-#### `ACME_FILE`
+#### `ACME_FILE`, `ACME_POSTHOOK`
 
-The `mlan/postfix-amavis` image looks for a file `ACME_FILE=/acme/acme.json`. at container startup and every time this file changes certificates within this file are exported and if the host name of one of those certificates matches `HOSTNAME=$(hostname)` is will be used for TLS support.
+The `mlan/postfix-amavis` image looks for a file `ACME_FILE=/acme/acme.json` at container startup and every time this file changes certificates within this file are exported. If the host or domain name of one of those certificates matches `HOSTNAME=$(hostname)` or `DOMAIN=${HOSTNAME#*.}` it will be used for TLS support. When the `ACME_FILE=/acme/acme.json` file changes and the certificates are updated we first remove all old saved certs and keys. Otherwise we might pick an old certificate in error.
 
-So reusing certificates from Traefik will work out of the box if the `/acme` directory in the Traefik container is also mounted in the mlan/postfix-amavis container.
+Once the certificates and keys have been updated, we run the command in the environment variable `ACME_POSTHOOK="postfix reload"`.
+
+So reusing certificates from Traefik will work out of the box if the `/acme` directory in the Traefik container is also mounted in the `mlan/postfix-amavis` container.
 
 ```bash
 docker run -d -name mta -v proxy-acme:/acme:ro mlan/postfix-amavis
