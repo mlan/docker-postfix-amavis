@@ -64,7 +64,6 @@ COPY	src/*/entry.d $DOCKER_ENTRY_DIR/
 RUN	source docker-common.sh \
 	&& source docker-config.sh \
 	&& dc_persist_dirs \
-	$DOCKER_ACME_SSL_DIR \
 	$DOCKER_APPL_SSL_DIR \
 	$DOCKER_AV_DIR \
 	$DOCKER_AV_LIB \
@@ -77,6 +76,7 @@ RUN	source docker-common.sh \
 	$DOCKER_MILT_LIB \
 	$DOCKER_SPAM_LIB \
 	$DOCKER_SPOOL_DIR \
+	&& mkdir -p $DOCKER_ACME_SSL_DIR \
 	&& apk --no-cache --update add \
 	runit \
 	postfix \

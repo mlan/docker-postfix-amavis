@@ -310,9 +310,9 @@ Let’s Encrypt provide free, automated, authorized certificates when you can de
 
 #### `ACME_FILE`, `ACME_POSTHOOK`
 
-The `mlan/postfix-amavis` image looks for a file `ACME_FILE=/acme/acme.json` at container startup and every time this file changes certificates within this file are exported. If the host or domain name of one of those certificates matches `HOSTNAME=$(hostname)` or `DOMAIN=${HOSTNAME#*.}` it will be used for TLS support. When the `ACME_FILE=/acme/acme.json` file changes and the certificates are updated we first remove all old saved certs and keys. Otherwise we might pick an old certificate in error.
+The `mlan/postfix-amavis` image looks for a file `ACME_FILE=/acme/acme.json` at container startup and every time this file changes certificates within this file are extracted. If the host or domain name of one of those certificates matches `HOSTNAME=$(hostname)` or `DOMAIN=${HOSTNAME#*.}` it will be used for TLS support.
 
-Once the certificates and keys have been updated, we run the command in the environment variable `ACME_POSTHOOK="postfix reload"`.
+Once the certificates and keys have been updated, we run the command in the environment variable `ACME_POSTHOOK="postfix reload"`. Postfix's parameters needs to be reloaded to update the LTS parameters. If such automatic reloading is not desired, set `ACME_POSTHOOK=` to empty.
 
 So reusing certificates from Traefik will work out of the box if the `/acme` directory in the Traefik container is also mounted in the `mlan/postfix-amavis` container.
 
@@ -320,7 +320,9 @@ So reusing certificates from Traefik will work out of the box if the `/acme` dir
 docker run -d -name mta -v proxy-acme:/acme:ro mlan/postfix-amavis
 ```
 
-Do not set `SMTPD_TLS_CERT_FILE` and/or `SMTPD_TLS_KEY_FILE` when using `ACME_FILE`.
+Note, if the target certificate Common Name (CN) or Subject Alternate Name (SAN) is changed the container needs to be restarted.
+
+Moreover, do not set `SMTPD_TLS_CERT_FILE` and/or `SMTPD_TLS_KEY_FILE` when using `ACME_FILE`.
 
 ## Incoming anti-spam and anti-virus
 

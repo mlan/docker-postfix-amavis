@@ -1,7 +1,7 @@
 # 1.4.1
 
-- [acme](src/acme) Remove all certs and keys when `ACME_FILE=/acme/acme.json` is updated. Otherwize we might pick old certificates in error.
 - [acme](src/acme) Introduce `ACME_POSTHOOK="postfix reload"` and run that after we have updated the certificates.
+- [docker](src/docker) Don't move `DOCKER_APPL_SSL_DIR=$DOCKER_SSL_DIR/postfix` to persistent storage. Data there is updated at container startup anyway. Moreover there is no need to remove old data when it is updated.
 
 # 1.4.0
 
