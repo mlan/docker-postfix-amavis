@@ -1,5 +1,6 @@
 # 1.4.1
 
+- [acme](src/acme) BREAKING change! When migrating from 1.3.7 or older you need to run `postconf -e smtpd_tls_cert_file=/etc/ssl/postfix/cert.pem` and `postconf -e smtpd_tls_key_file=/etc/ssl/postfix/priv_key.pem` from within the container.
 - [acme](src/acme) Introduce `ACME_POSTHOOK="postfix reload"` and run that after we have updated the certificates.
 - [docker](src/docker) Don't move `DOCKER_APPL_SSL_DIR=$DOCKER_SSL_DIR/postfix` to persistent storage. Data there is updated at container startup anyway. Moreover there is no need to remove old data when it is updated.
 
