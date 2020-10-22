@@ -1,6 +1,6 @@
 -include    *.mk
 
-BLD_ARG  ?= --build-arg DIST=alpine --build-arg REL=3.12
+BLD_ARG  ?= --build-arg DIST=alpine --build-arg REL=3.12.1
 BLD_REPO ?= mlan/postfix-amavis
 BLD_VER  ?= latest
 

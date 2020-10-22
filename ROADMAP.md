@@ -7,7 +7,7 @@ Don't make DOCKER_ACME_SSL_DIR=/etc/ssl/acme persistent. We will remove all old 
 ## Runit
 
 Need to fix runit script for postfix. It does not kill all children.
-the reson is that we don't let `runsvdir` become pid=1 and `postfix startup-fg`
+the reason is that we don't let `runsvdir` become pid=1 and `postfix startup-fg`
 checks for pid=1 and since it isn't start `master -s` instead of `exec master -i`
 , see `/usr/libexec/postfix/postfix-script`.
 

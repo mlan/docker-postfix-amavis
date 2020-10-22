@@ -1,3 +1,8 @@
+# 1.4.2
+
+- [docker](Dockerfile) Now use alpine:3.12.1 (postfix:3.5.7).
+- [docker](src/docker/bin/docker-common.sh) Print package versions using `dc_apk_versions()`.
+
 # 1.4.1
 
 - [acme](src/acme) BREAKING change! When migrating from 1.3.7 or older you need to run `postconf -e smtpd_tls_cert_file=/etc/ssl/postfix/cert.pem` and `postconf -e smtpd_tls_key_file=/etc/ssl/postfix/priv_key.pem` from within the container.

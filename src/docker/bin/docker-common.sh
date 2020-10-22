@@ -100,3 +100,20 @@ dc_update_loglevel() {
 		[ -n "$DOCKER_RUNFUNC" ] && sv restart syslogd
 	fi
 }
+
+#
+# Print package versions
+#
+dc_apk_versions() {
+	local pkgs="$@"
+	local len=$(echo $pkgs | tr " " "\n" | wc -L)
+	local ver
+	local os=$(sed -rn 's/PRETTY_NAME="(.*)"/\1/p' /etc/os-release)
+	local kern=$(uname -r)
+	local host=$(uname -n)
+	dc_log 5 $host $os $kern
+	for pkg in $pkgs; do
+		ver=$(apk info -s $pkg 2> /dev/null | sed -rn 's/.*-(.*)-.*/\1/p')
+		printf "\t%-${len}s\t%s\n" $pkg $ver
+	done
+}
