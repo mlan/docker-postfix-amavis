@@ -70,12 +70,15 @@ services:
     networks:
       - backend
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8008:80"    # WebApp & EAS (alt. HTTP)
+      - "127.0.0.1:110:110"    # POP3 (not needed if all devices can use EAS)
+      - "127.0.0.1:143:143"    # IMAP (not needed if all devices can use EAS)
+      - "127.0.0.1:8080:8080"  # CalDAV (not needed if all devices can use EAS)
     depends_on:
       - auth
       - db
       - mta
-    environment:
+    environment: # Virgin config, ignored on restarts unless FORCE_CONFIG given.
       - USER_PLUGIN=ldap
       - LDAP_URI=ldap://auth:389/
       - MYSQL_HOST=db
@@ -86,14 +89,18 @@ services:
       - MYSQL_DATABASE=${MYSQL_DATABASE-kopano}
       - MYSQL_USER=${MYSQL_USER-kopano}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
+      - POP3_LISTEN=*:110                       # also listen to eth0
+      - IMAP_LISTEN=*:143                       # also listen to eth0
+      - ICAL_LISTEN=*:8080                      # also listen to eth0
+      - DISABLED_FEATURES=${DISABLED_FEATURES-} # also enable IMAP and POP3
       - SYSLOG_LEVEL=${SYSLOG_LEVEL-3}
     volumes:
       - app-conf:/etc/kopano
       - app-atch:/var/lib/kopano/attachments
       - app-sync:/var/lib/z-push
-      - app-spam:/var/lib/kopano/spamd     # kopano-spamd integration
-      - /etc/localtime:/etc/localtime:ro    # Use host timezone
-    cap_add: # helps debugging by alowing strace
+      - app-spam:/var/lib/kopano/spamd          # kopano-spamd integration
+      - /etc/localtime:/etc/localtime:ro        # Use host timezone
+    cap_add: # helps debugging by allowing strace
       - sys_ptrace
 
   mta:
@@ -102,10 +109,10 @@ services:
     networks:
       - backend
     ports:
-      - "127.0.0.1:25:25"
+      - "127.0.0.1:25:25"      # SMTP
     depends_on:
       - auth
-    environment:
+    environment: # Virgin config, ignored on restarts unless FORCE_CONFIG given.
       - MESSAGE_SIZE_LIMIT=${MESSAGE_SIZE_LIMIT-25600000}
       - LDAP_HOST=auth
       - VIRTUAL_TRANSPORT=lmtp:app:2003
@@ -122,9 +129,9 @@ services:
       - RAZOR_REGISTRATION=${RAZOR_REGISTRATION-}
     volumes:
       - mta:/srv
-      - app-spam:/var/lib/kopano/spamd     # kopano-spamd integration
-      - /etc/localtime:/etc/localtime:ro    # Use host timezone
-    cap_add: # helps debugging by alowing strace
+      - app-spam:/var/lib/kopano/spamd          # kopano-spamd integration
+      - /etc/localtime:/etc/localtime:ro        # Use host timezone
+    cap_add: # helps debugging by allowing strace
       - sys_ptrace
 
   db:
@@ -140,7 +147,7 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
     volumes:
       - db:/var/lib/mysql
-      - /etc/localtime:/etc/localtime:ro    # Use host timezone
+      - /etc/localtime:/etc/localtime:ro        # Use host timezone
 
   auth:
     image: mlan/openldap
@@ -150,7 +157,7 @@ services:
       - LDAP_LOGLEVEL=parse
     volumes:
       - auth:/srv
-      - /etc/localtime:/etc/localtime:ro    # Use host timezone
+      - /etc/localtime:/etc/localtime:ro        # Use host timezone
 
 networks:
   backend:
@@ -179,7 +186,7 @@ From within the [demo](demo) directory you can start the containers by typing:
 make init
 ```
 
-Then you can assess WebApp on the URL [`http://localhost:8080`](http://localhost:8080) and log in with the user name `demo` and password `demo` . 
+Then you can assess WebApp on the URL [`http://localhost:8008`](http://localhost:8008) and log in with the user name `demo` and password `demo` . 
 
 ```bash
 make web
@@ -218,7 +225,7 @@ During the image build this file is created. When the the container is started t
 
 The unlock file approach was selected since it is difficult to accidentally _create_ a file.
 
-In the rare event that want to modify the configuration of an existing container you can override the default behavior by setting `FORCE_CONFIG` to a no-empty string.
+In the rare event that want to modify the configuration of an existing container you can override the default behavior by setting `FORCE_CONFIG=OVERWRITE` to a no-empty string.
 
 ## Environment variables
 
@@ -487,12 +494,6 @@ Local mail boxes will be created if there is no `VIRTUAL_TRANSPORT` defined. The
 ## Message size limit `MESSAGE_SIZE_LIMIT`
 
 The maximal size in bytes of a message, including envelope information. Default: `MESSAGE_SIZE_LIMIT=10240000` ~10MB. Many mail servers are configured with maximal size of 10MB, 20MB or 25MB.
-
-## SMTP Client Authentication
-
-Sometimes want to authenticate SMTP client connecting to the submission port 578.
-
-`SMTPD_SASL_CLIENTAUTH="client1:{plain}password1 client2:{plain}password2"`
 
 ## Logging `SYSLOG_LEVEL`, `LOG_LEVEL`, `SA_DEBUG`
 

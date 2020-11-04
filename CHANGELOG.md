@@ -1,3 +1,8 @@
+# 1.4.3
+
+- [demo](demo) Enable IMAP POP3 and CalDAV/iCAL in demo.
+- [docker](README.md) Update docker-compose example.
+
 # 1.4.2
 
 - [docker](Dockerfile) Now use alpine:3.12.1 (postfix:3.5.7).

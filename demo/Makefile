@@ -70,7 +70,7 @@ wait_%:
 	sleep $*
 
 web:
-	firefox localhost:8080 &
+	firefox localhost:8008 &
 
 auth-show_conf:
 	docker-compose exec auth ldap search -b cn=config olcDatabase={1}mdb
@@ -141,7 +141,20 @@ app-test_smtp: mta-test
 app-test_lmtp:
 	printf "LHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A LMTP test message from me to you\n\nDelete me, please \n.\nQUIT\n" | nc -C $(call _ip,$(COMPOSE_PROJECT_NAME)_app_1) 2003
 
-app-show_user1: 
+app-hostaddr:
+	$(eval myhost := $(call _ip,$(COMPOSE_PROJECT_NAME)_app_1))
+
+app-test_imap: app-hostaddr
+	curl imap://$(myhost) -X CAPABILITY
+	curl imap://$(myhost) -u $(LDAP_TEST_USER):$(LDAP_TEST_PASSWD)
+
+app-test_pop3: app-hostaddr
+	curl pop3://$(myhost) -u $(LDAP_TEST_USER):$(LDAP_TEST_PASSWD)
+
+app-test_ical: app-hostaddr
+	curl http://$(myhost):8080 -u $(LDAP_TEST_USER):$(LDAP_TEST_PASSWD)
+
+app-show_user1:
 	docker-compose exec app kopano-admin -l
 
 app-show_user2: app-debugtools
