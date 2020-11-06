@@ -257,9 +257,27 @@ To configure the Postfix SMTP client connecting using the legacy SMTPS protocol 
 
 ## Incoming SMTPS and submission client authentication
 
-Postfix achieves client authentication using Dovecot. Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the `SMTP_RELAY_HOSTAUTH`. Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587. To avoid the risk of being an open relay the SMTPS and submission services are only activated when `SMTPD_SASL_CLIENTAUTH` is set. Additionally clients are required to authenticate using TLS to avoid password being sent in the clear. The configuration of the services are the similar with the exception that the SMTPS service uses the legacy SMTPS protocol; `SMTPD_TLS_WRAPPERMODE=yes`, whereas the submission service uses the STARTTLS protocol.
+Postfix achieves client authentication using SASL provided by [Dovecot](https://dovecot.org/). Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the `SMTP_RELAY_HOSTAUTH`. Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587.
 
-#### `SMTPD_SASL_CLIENTAUTH`
+To avoid the risk of being an open relay the SMTPS and submission services are only activated when at least one SASL method has activated. Three methods are supported; LDAP, IMAP and password file. Any combination of methods can simultaneously be active. If more than one method is active, authentication is attempted in the following order, LDAP, IMAP and password file.
+
+A method is activated when its required variables has been defined. For LDAP, `LDAP_QUERY_ATTRS_PASS` is needed in addition to the LDAP variables discussed in [LDAP mailbox lookup](#ldap-mailbox-lookup). IMAP needs the `SMTPD_SASL_IMAPHOST` variable and password file require `SMTPD_SASL_CLIENTAUTH`.
+
+Additionally clients are required to authenticate using TLS to avoid password being sent in the clear. The configuration of the services are the similar with the exception that the SMTPS service uses the legacy SMTPS protocol; `SMTPD_TLS_WRAPPERMODE=yes`, whereas the submission service uses the STARTTLS protocol.
+
+### LDAP SASL client authentication `LDAP_QUERY_ATTRS_PASS`
+
+Use the passwords provided by the same LDAP server configured for [LDAP mailbox lookup](#ldap-mailbox-lookup). To have this work you only need to provide `LDAP_QUERY_ATTRS_PASS=mail=user,userPassword=password`.
+
+See [LDAP](https://doc.dovecot.org/configuration_manual/authentication/ldap/) for more details.
+
+### IMAP SASL client authentication `SMTPD_SASL_IMAPHOST`
+
+Authentication via remote IMAP server (RIMAP). Examples `SMTPD_SASL_IMAPHOST=imap.example.com`, `SASL_IMAP_HOST=192.168.1.123:143`.
+
+For more details see [Authentication via remote IMAP server](https://doc.dovecot.org/configuration_manual/protocols/imap/#imap).
+
+### Password file SASL client authentication `SMTPD_SASL_CLIENTAUTH`
 
 You can list clients and their passwords in a space separated string using the format: `"username:{scheme}passwd"`. Example: `SMTPD_SASL_CLIENTAUTH="client1:{plain}passwd1 client2:{plain}passwd2"`. For security you might want to use encrypted passwords. One way to encrypt a password (`{plain}secret`) is by running
 

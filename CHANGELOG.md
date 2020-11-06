@@ -1,5 +1,6 @@
 # 1.4.3
 
+- [dovecot](src/dovecot) Added SASL authentication methods LDAP and IMAP (RIMAP).
 - [demo](demo) Enable IMAP POP3 and CalDAV/iCAL in demo.
 - [docker](README.md) Update docker-compose example.
 

@@ -43,7 +43,7 @@ ENV	DOCKER_ACME_SSL_DIR=$DOCKER_SSL_DIR/acme \
 	DOCKER_AVNGN_FILE=$DOCKER_AV_DIR/clamd.conf \
 	DOCKER_AVSIG_FILE=$DOCKER_AV_DIR/freshclam.conf \
 	DOCKER_SPAM_FILE=$DOCKER_SPAM_DIR/local.cf \
-	DOCKER_IMAPPASSWD_FILE=$DOCKER_IMAP_DIR/virt-passwd
+	DOCKER_IMAP_PASSDB_FILE=$DOCKER_IMAP_DIR/virt-passwd
 
 #
 # Copy utility scripts including docker-entrypoint.sh to image
@@ -135,13 +135,14 @@ FROM	mini AS base
 
 RUN	apk --no-cache --update add \
 	dovecot \
+	dovecot-ldap \
 	jq \
 	&& docker-service.sh "dovecot -F" \
 	&& rm -f /etc/ssl/dovecot/* \
 	&& addgroup $DOCKER_APPL_RUNAS $DOCKER_IMAP_RUNAS \
 	&& addgroup $DOCKER_IMAP_RUNAS $DOCKER_APPL_RUNAS \
 	&& source dovecot-common.sh \
-	&& dc_dovecot_setup_passwdfile
+	&& dc_dovecot_setup_docker
 
 #
 #

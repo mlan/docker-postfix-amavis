@@ -52,11 +52,13 @@ services:
       - MESSAGE_SIZE_LIMIT=${MESSAGE_SIZE_LIMIT-25600000}
       - LDAP_HOST=auth
       - VIRTUAL_TRANSPORT=lmtp:app:2003
+      - SMTPD_SASL_IMAPHOST=app
       - SMTP_RELAY_HOSTAUTH=${SMTP_RELAY_HOSTAUTH-}
       - SMTP_TLS_SECURITY_LEVEL=${SMTP_TLS_SECURITY_LEVEL-}
       - SMTP_TLS_WRAPPERMODE=${SMTP_TLS_WRAPPERMODE-no}
       - LDAP_USER_BASE=ou=${LDAP_USEROU-users},${LDAP_BASE-dc=example,dc=com}
       - LDAP_QUERY_FILTER_USER=(&(objectclass=${LDAP_USEROBJ-posixAccount})(mail=%s))
+      - LDAP_QUERY_ATTRS_PASS=mail=user,userPassword=password
       - DKIM_SELECTOR=${DKIM_SELECTOR-default}
       - SA_TAG_LEVEL_DEFLT=${SA_TAG_LEVEL_DEFLT-2.0}
       - SA_DEBUG=${SA_DEBUG-0}

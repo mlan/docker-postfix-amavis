@@ -119,6 +119,29 @@ mta-encrypt:
 	$(eval secret := $(shell whiptail --backtitle "doveadm pw" --title "encrypt password" --inputbox "password" 8 78 secret 3>&1 1>&2 2>&3))
 	docker-compose exec mta doveadm pw -p $(secret)
 
+mta-show_doveconf:
+	docker-compose exec mta doveconf -n
+
+mta-show_postconf:
+	docker-compose exec mta postconf -n
+
+mta-hostaddr:
+	$(eval myhost := $(call _ip,$(COMPOSE_PROJECT_NAME)_mta_1))
+
+mta-test_auth:
+	docker-compose exec mta doveadm auth test $(LDAP_TEST_USER) $(LDAP_TEST_PASSWD)
+
+mta-test_imap: mta-hostaddr
+	curl imap://$(myhost) -X CAPABILITY
+	curl imap://$(myhost) -u $(LDAP_TEST_USER):$(LDAP_TEST_PASSWD)
+
+mta-test_rimap:
+	docker-compose exec mta curl imap://app -X CAPABILITY
+	docker-compose exec mta curl imap://app -u $(LDAP_TEST_USER):$(LDAP_TEST_PASSWD)
+
+mta-test_ldap: mta-debugtools
+	docker-compose exec mta ldapsearch -H ldap://auth:389 -xLLL -s base namingContexts
+
 db-test:
 	docker-compose exec db mysqlshow -u $(MYSQL_USER) $(MYSQL_DATABASE) -p$(MYSQL_PASSWORD)
 

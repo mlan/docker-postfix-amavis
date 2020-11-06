@@ -5,45 +5,137 @@
 # Define variables and functions used during container initialization.
 #
 # Defined in Dockerfile:
-# DOCKER_IMAPPASSWD_FILE
+# DOCKER_IMAP_DIR DOCKER_IMAP_PASSDB_FILE
+#
+DOVECOT_CD=${DOVECOT_CD-$DOCKER_IMAP_DIR/conf.d}
+
+#
+# Setup dovecot sasl auth for smtps and submission.
 #
 dovecot_setup_postfix() {
-	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	# dovecot need to be installed
-	if (dc_is_installed dovecot && [ -n "$clientauth" ]); then
-		dc_log 5 "Enabling postfix-dovecot client SASL via submission"
-		# create client passwd file used for autentication
-		for entry in $clientauth; do
-			dc_cond_append $DOCKER_IMAPPASSWD_FILE $entry
-		done
-		# enable sasl auth on the submission port
-		postconf -M "submission/inet=submission inet n - n - - smtpd"
-		postconf -P "submission/inet/syslog_name=postfix/submission"
-		postconf -P "submission/inet/smtpd_sasl_auth_enable=yes"
-		postconf -P "submission/inet/smtpd_sasl_type=dovecot"
-		postconf -P "submission/inet/smtpd_sasl_path=private/auth"
-		postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
-		postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
-		postconf -P "submission/inet/smtpd_tls_auth_only=yes"
-		postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
-		postconf -P "submission/inet/smtpd_recipient_restrictions=permit_auth_destination,reject"
-#		postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
-		postconf -M "smtps/inet=smtps inet n - n - - smtpd"
-		postconf -P "smtps/inet/syslog_name=postfix/smtps"
-		postconf -P "smtps/inet/smtpd_sasl_auth_enable=yes"
-		postconf -P "smtps/inet/smtpd_sasl_type=dovecot"
-		postconf -P "smtps/inet/smtpd_sasl_path=private/auth"
-		postconf -P "smtps/inet/smtpd_sasl_security_options=noanonymous"
-		postconf -P "smtps/inet/smtpd_tls_security_level=encrypt"
-		postconf -P "smtps/inet/smtpd_tls_auth_only=yes"
-		postconf -P "smtps/inet/smtpd_tls_wrappermode=yes"
-		postconf -P "smtps/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
-		postconf -P "smtps/inet/smtpd_recipient_restrictions=permit_auth_destination,reject"
-#		postconf -P "smtps/inet/smtpd_reject_unlisted_recipient=yes"
-		if dc_is_installed amavisd-new; then
-			postconf -P "submission/inet/cleanup_service_name=pre-cleanup"
-			postconf -P "smtps/inet/cleanup_service_name=pre-cleanup"
+	if dc_is_installed dovecot; then
+		dovecot_setup_passdb_file
+		dovecot_setup_passdb_imap
+		dovecot_setup_passdb_ldap
+		if [ -n "$setup_passdb" ]; then
+			dovecot_setup_smtpd_sasl
 		fi
+	fi
+}
+
+#
+# Configure postfix sasl auth to use dovecot.
+#
+dovecot_setup_smtpd_sasl() {
+	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
+	dc_log 5 "Enabling postfix-dovecot client SASL via submission"
+	# enable sasl auth on the submission port
+	postconf -M "submission/inet=submission inet n - n - - smtpd"
+	postconf -P "submission/inet/syslog_name=postfix/submission"
+	postconf -P "submission/inet/smtpd_sasl_auth_enable=yes"
+	postconf -P "submission/inet/smtpd_sasl_type=dovecot"
+	postconf -P "submission/inet/smtpd_sasl_path=private/auth"
+	postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
+	postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
+	postconf -P "submission/inet/smtpd_tls_auth_only=yes"
+	postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
+	postconf -P "submission/inet/smtpd_recipient_restrictions=permit_auth_destination,reject"
+#	postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
+	postconf -M "smtps/inet=smtps inet n - n - - smtpd"
+	postconf -P "smtps/inet/syslog_name=postfix/smtps"
+	postconf -P "smtps/inet/smtpd_sasl_auth_enable=yes"
+	postconf -P "smtps/inet/smtpd_sasl_type=dovecot"
+	postconf -P "smtps/inet/smtpd_sasl_path=private/auth"
+	postconf -P "smtps/inet/smtpd_sasl_security_options=noanonymous"
+	postconf -P "smtps/inet/smtpd_tls_security_level=encrypt"
+	postconf -P "smtps/inet/smtpd_tls_auth_only=yes"
+	postconf -P "smtps/inet/smtpd_tls_wrappermode=yes"
+	postconf -P "smtps/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
+	postconf -P "smtps/inet/smtpd_recipient_restrictions=permit_auth_destination,reject"
+#	postconf -P "smtps/inet/smtpd_reject_unlisted_recipient=yes"
+	if dc_is_installed amavisd-new; then
+		postconf -P "submission/inet/cleanup_service_name=pre-cleanup"
+		postconf -P "smtps/inet/cleanup_service_name=pre-cleanup"
+	fi
+}
+
+#
+# Configure dovecot to use passwd-file
+#
+dovecot_setup_passdb_file() {
+	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
+	if [ -n "$clientauth" ]; then
+		setup_passdb=file
+		dc_log 5 "Setup Dovecot passdb file"
+		cat <<-!cat > $DOVECOT_CD/22-passdb-file.conf
+			passdb {
+			driver = passwd-file
+			args = $DOCKER_IMAP_PASSDB_FILE
+			}
+			userdb {
+			driver = static
+			args = uid=500 gid=500 home=/home/%u
+			}
+		!cat
+		# create client passwd file used for authentication
+		for entry in $clientauth; do
+			dc_cond_append $DOCKER_IMAP_PASSDB_FILE $entry
+		done
+	fi
+}
+
+#
+# Configure dovecot to use remote imap server.
+#
+dovecot_setup_passdb_imap() {
+	local imaphost=${1-$SMTPD_SASL_IMAPHOST}
+	if [ -n "$imaphost" ]; then
+		setup_passdb=imap
+		dc_log 5 "Setup dovecot passdb remote-imap-host $imaphost"
+		cat <<-!cat > $DOVECOT_CD/21-passdb-imap.conf
+			passdb {
+			driver = imap
+			args = host=$imaphost
+			}
+			# Enable some workarounds for Thunderbird
+			imap_client_workarounds = tb-extra-mailbox-sep tb-lsub-flags
+		!cat
+	fi
+}
+
+#
+# Configure dovecot to use ldap.
+#
+dovecot_setup_passdb_ldap() {
+	local mail_filter=${LDAP_QUERY_FILTER_USER/%s/%u}
+	local pass_filter=${LDAP_QUERY_FILTER_PASS-$mail_filter}
+	local passdb_ldap_cf=$DOVECOT_CD/20-passdb-ldap.conf
+	local passdb_ldap_arg=$DOVECOT_CD/passdb-ldap.conf.ext
+	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$pass_filter" ] && [ -n "$LDAP_QUERY_ATTRS_PASS" ]); then
+		setup_passdb=ldap
+		dc_log 5 "Setup dovecot passdb ldap-host $LDAP_HOST"
+		cat <<-!cat > $passdb_ldap_cf
+			passdb {
+			driver = ldap
+			args = $passdb_ldap_arg
+			}
+			userdb {
+			driver = ldap
+			args = $passdb_ldap_arg
+			}
+		!cat
+		cat <<-!cat > $passdb_ldap_arg
+			hosts = $LDAP_HOST
+			base = $LDAP_USER_BASE
+			dn = $LDAP_BIND_DN
+			dnpass = $LDAP_BIND_PW
+			ldap_version = 3
+			scope = subtree
+			pass_attrs = $LDAP_QUERY_ATTRS_PASS
+			pass_filter = $pass_filter
+			user_filter = $pass_filter
+		!cat
 	fi
 }
 
