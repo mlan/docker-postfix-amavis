@@ -12,7 +12,9 @@ variables:
 
 test: mta-test
 
-init: auth-up wait_11 auth-mod_index auth-add_user db-up mta-up app-up
+init: auth-init db-up mta-up app-up
+
+auth-init: auth-up wait_11 auth-mod_hash auth-mod_index auth-add_user
 
 ps:
 	docker-compose ps
@@ -73,10 +75,18 @@ web:
 	firefox localhost:8008 &
 
 auth-show_conf:
+	docker-compose exec auth ldap search -b cn=config "(cn=config)"
+	docker-compose exec auth ldap search -b cn=config olcDatabase={-1}frontend
 	docker-compose exec auth ldap search -b cn=config olcDatabase={1}mdb
 
 auth-show_user:
 	docker-compose exec auth ldap search -b "$(LDAP_BASE)"
+
+auth-show_cat0:
+	docker-compose exec auth slapcat -n0
+
+auth-show_cat1:
+	docker-compose exec auth slapcat -n1
 
 auth-add_user:
 	printf "dn: ou=$(LDAP_USEROU),$(LDAP_BASE)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_USEROU)\n\ndn: ou=$(LDAP_GROUPOU),$(LDAP_BASE)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_GROUPOU)\n\ndn: uid=$(LDAP_TEST_USER),ou=$(LDAP_USEROU),$(LDAP_BASE)\nchangetype: add\nobjectClass: top\nobjectClass: inetOrgPerson\nobjectClass: $(LDAP_USEROBJ)\ncn: $(LDAP_TEST_USER)\nsn: $(LDAP_TEST_USER)\nuid: $(LDAP_TEST_USER)\nmail: $(LDAP_TEST_USER)@$(MAIL_DOMAIN)\nuidNumber: 1234\ngidNumber: 1234\nhomeDirectory: /home/$(LDAP_TEST_USER)\nuserPassword: $(LDAP_TEST_PASSWD)\n" \
@@ -84,6 +94,10 @@ auth-add_user:
 
 auth-mod_index:
 	printf "dn: olcDatabase={1}mdb,cn=config\nchangetype: modify\nadd: olcDbIndex\nolcDbIndex: cn,ou,uid,mail eq\n" \
+	| docker-compose exec -T auth ldap modify
+
+auth-mod_hash:
+	printf "dn: olcDatabase={-1}frontend,cn=config\nchangetype: modify\nadd: olcPasswordHash\nolcPasswordHash: {CRYPT}\n\ndn: cn=config\nchangetype: modify\nadd: olcPasswordCryptSaltFormat\nolcPasswordCryptSaltFormat: \$$6\$$%%.16s\n" \
 	| docker-compose exec -T auth ldap modify
 
 mta-bayes:

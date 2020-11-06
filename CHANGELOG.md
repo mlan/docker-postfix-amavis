@@ -1,8 +1,10 @@
 # 1.4.3
 
 - [dovecot](src/dovecot) Added SASL authentication methods LDAP and IMAP (RIMAP).
+- [dovecot](src/dovecot) SASL LDAP now use `auth_bind = yes`.
 - [demo](demo) Enable IMAP POP3 and CalDAV/iCAL in demo.
 - [docker](README.md) Update docker-compose example.
+- [docker](README.md) Update SMPTS SASL authentication sections.
 
 # 1.4.2
 

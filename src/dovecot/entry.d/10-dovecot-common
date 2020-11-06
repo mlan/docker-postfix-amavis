@@ -107,9 +107,13 @@ dovecot_setup_passdb_imap() {
 #
 # Configure dovecot to use ldap.
 #
+# Try to reuse LDAP_QUERY_FILTER_USER which might contain (mail=%s). If so
+# replace is with (<user>=%u) where <user> is taken from LDAP_QUERY_ATTRS_PASS.
+#
 dovecot_setup_passdb_ldap() {
-	local mail_filter=${LDAP_QUERY_FILTER_USER/%s/%u}
-	local pass_filter=${LDAP_QUERY_FILTER_PASS-$mail_filter}
+	local pass_filter_1=${LDAP_QUERY_ATTRS_PASS/=user*/}
+	local pass_filter_2=${LDAP_QUERY_FILTER_USER/mail=%s/$pass_filter_1=%u}
+	local pass_filter=${LDAP_QUERY_FILTER_PASS-$pass_filter_2}
 	local passdb_ldap_cf=$DOVECOT_CD/20-passdb-ldap.conf
 	local passdb_ldap_arg=$DOVECOT_CD/passdb-ldap.conf.ext
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$pass_filter" ] && [ -n "$LDAP_QUERY_ATTRS_PASS" ]); then
@@ -126,10 +130,9 @@ dovecot_setup_passdb_ldap() {
 			}
 		!cat
 		cat <<-!cat > $passdb_ldap_arg
+			auth_bind = yes
 			hosts = $LDAP_HOST
 			base = $LDAP_USER_BASE
-			dn = $LDAP_BIND_DN
-			dnpass = $LDAP_BIND_PW
 			ldap_version = 3
 			scope = subtree
 			pass_attrs = $LDAP_QUERY_ATTRS_PASS

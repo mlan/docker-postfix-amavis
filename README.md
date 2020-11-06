@@ -121,6 +121,7 @@ services:
       - SMTP_TLS_WRAPPERMODE=${SMTP_TLS_WRAPPERMODE-no}
       - LDAP_USER_BASE=ou=${LDAP_USEROU-users},${LDAP_BASE-dc=example,dc=com}
       - LDAP_QUERY_FILTER_USER=(&(objectclass=${LDAP_USEROBJ-posixAccount})(mail=%s))
+      - LDAP_QUERY_ATTRS_PASS=uid=user
       - DKIM_SELECTOR=${DKIM_SELECTOR-default}
       - SA_TAG_LEVEL_DEFLT=${SA_TAG_LEVEL_DEFLT-2.0}
       - SA_DEBUG=${SA_DEBUG-0}
@@ -259,23 +260,11 @@ To configure the Postfix SMTP client connecting using the legacy SMTPS protocol 
 
 Postfix achieves client authentication using SASL provided by [Dovecot](https://dovecot.org/). Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the `SMTP_RELAY_HOSTAUTH`. Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587.
 
-To avoid the risk of being an open relay the SMTPS and submission services are only activated when at least one SASL method has activated. Three methods are supported; LDAP, IMAP and password file. Any combination of methods can simultaneously be active. If more than one method is active, authentication is attempted in the following order, LDAP, IMAP and password file.
+To avoid the risk of being an open relay the SMTPS and submission services are only activated when at least one SASL method has activated. Three methods are supported; LDAP, IMAP and password file. Any combination of methods can simultaneously be active. If more than one method is active, authentication is attempted in the following order; password file, LDAP and finally IMAP.
 
-A method is activated when its required variables has been defined. For LDAP, `LDAP_QUERY_ATTRS_PASS` is needed in addition to the LDAP variables discussed in [LDAP mailbox lookup](#ldap-mailbox-lookup). IMAP needs the `SMTPD_SASL_IMAPHOST` variable and password file require `SMTPD_SASL_CLIENTAUTH`.
+A method is activated when its required variables has been defined. For LDAP, `LDAP_QUERY_ATTRS_PASS` is needed in addition to the LDAP variables discussed in [LDAP mailbox lookup](#ldap-mailbox-lookup). IMAP needs the `SMTPD_SASL_IMAPHOST` variable and password file require `SMTPD_SASL_CLIENTAUTH`.
 
 Additionally clients are required to authenticate using TLS to avoid password being sent in the clear. The configuration of the services are the similar with the exception that the SMTPS service uses the legacy SMTPS protocol; `SMTPD_TLS_WRAPPERMODE=yes`, whereas the submission service uses the STARTTLS protocol.
-
-### LDAP SASL client authentication `LDAP_QUERY_ATTRS_PASS`
-
-Use the passwords provided by the same LDAP server configured for [LDAP mailbox lookup](#ldap-mailbox-lookup). To have this work you only need to provide `LDAP_QUERY_ATTRS_PASS=mail=user,userPassword=password`.
-
-See [LDAP](https://doc.dovecot.org/configuration_manual/authentication/ldap/) for more details.
-
-### IMAP SASL client authentication `SMTPD_SASL_IMAPHOST`
-
-Authentication via remote IMAP server (RIMAP). Examples `SMTPD_SASL_IMAPHOST=imap.example.com`, `SASL_IMAP_HOST=192.168.1.123:143`.
-
-For more details see [Authentication via remote IMAP server](https://doc.dovecot.org/configuration_manual/protocols/imap/#imap).
 
 ### Password file SASL client authentication `SMTPD_SASL_CLIENTAUTH`
 
@@ -288,6 +277,24 @@ docker exec -it mta doveadm pw -p secret
 ```
 
 for use in `SMTPD_SASL_CLIENTAUTH`.
+
+### LDAP SASL client authentication `LDAP_QUERY_ATTRS_PASS`
+
+Using [LDAP with authentication binds](https://wiki.dovecot.org/AuthDatabase/LDAP/AuthBinds), Dovecot, binds, using the SMTPS client credentials, to the LDAP server which that verifies the them. See [LDAP](https://doc.dovecot.org/configuration_manual/authentication/ldap/) for more details.
+
+The LDAP client configurations described in [LDAP mailbox lookup](#ldap-mailbox-lookup) are also used here. In addition to these, the binding `<user>` attribute needs to be specified using `LDAP_QUERY_ATTRS_PASS`. The `<user>` attribute is defined in this way `LDAP_QUERY_ATTRS_PASS=<user>=user`. To exemplify, if `uid` is the desired `<user>` attribute define `LDAP_QUERY_ATTRS_PASS=uid=user`.
+
+#### `LDAP_QUERY_FILTER_PASS` 
+
+Dovecot sends a LDAP request defined by `LDAP_QUERY_FILTER_PASS` to lookup the DN that will be used for the authentication bind. Example: `LDAP_QUERY_FILTER_PASS=(&(objectclass=posixAccount)(uid=%u))`.
+
+ `LDAP_QUERY_FILTER_PASS` can be omitted in which case the filter is being reconstructed from `LDAP_QUERY_FILTER_USER`. The reconstruction tries to replace the string `(mail=%s)` in `LDAP_QUERY_FILTER_USER` with `(<user>=%u),` where `<user>` is taken from `LDAP_QUERY_ATTRS_PASS`. Example: `LDAP_QUERY_FILTER_USER=(&(objectclass=posixAccount)(mail=%s))` and `LDAP_QUERY_ATTRS_PASS=uid=user` will result in this filter `(&(objectclass=posixAccount)(uid=%u))`.
+
+### IMAP SASL client authentication `SMTPD_SASL_IMAPHOST`
+
+Dovecot, can authenticate users against a remote IMAP server (RIMAP). For this to work it is sufficient to provide the address of the IMAP host, by using `SMTPD_SASL_IMAPHOST`. Examples `SMTPD_SASL_IMAPHOST=app`, `SASL_IMAP_HOST=192.168.1.123:143`.
+
+For more details see [Authentication via remote IMAP server](https://doc.dovecot.org/configuration_manual/protocols/imap).
 
 ## Incoming destination domain
 
@@ -472,28 +479,37 @@ For LDAP mailbox lookup to work `LDAP_HOST`, `LDAP_USER_BASE` and `LDAP_QUERY_FI
 
 If the LDAP server is not configured to allow anonymous queries, you use `LDAP_BIND_DN` and `LDAP_BIND_PW` to proved LDAP user and password to be used for the queries.
 
+### Required LDAP parameters
+
 #### `LDAP_HOST`
 
 Use `LDAP_HOST` to configure the connection to the LDAP server. When the default port (389) is used just providing the server name is often sufficient. You can also use full URL or part thereof, for example: `LDAP_HOST=auth`, `LDAP_HOST=auth:389`, `LDAP_HOST=ldap://ldap.example.com:1444`.
 
-#### `LDAP_USER_BASE`, `LDAP_GROUP_BASE`
+#### `LDAP_USER_BASE`
 
-The `LDAP_USER_BASE`, `LDAP_GROUP_BASE` are the base DNs at which to conduct the searches for users and groups respectively. Examples: `LDAP_USER_BASE=ou=people,dc=example,dc=com` and `LDAP_GROUP_BASE=ou=groups,dc=example,dc=com`.
+The `LDAP_USER_BASE`, is the base DNs at which to conduct the searches for users. Example: `LDAP_USER_BASE=ou=people,dc=example,dc=com`.
 
-#### `LDAP_QUERY_FILTER_USER`, `LDAP_QUERY_FILTER_ALIAS`
+#### `LDAP_QUERY_FILTER_USER`
 
-These are the filters used to search the directory, where `%s` is a
-substitute for the address Postfix is trying to resolve. 
+This is the filter used to search the directory, where `%s` is a
+substitute for the address Postfix is trying to resolve. Example, only consider the email address of users who also have `objectclass=posixAccount`; `LDAP_QUERY_FILTER_USER=(&(objectclass=posixAccount)(mail=%s))`.
 
-Example, only consider the email address of users who also have `kopanoAccount=1`: `LDAP_QUERY_FILTER_USER=(&(kopanoAccount=1)(mail=%s))`.
+### Optional LDAP parameters
 
-Example, only consider email aliases of users who also have `kopanoAccount=1`: `LDAP_QUERY_FILTER_ALIAS=(&(kopanoAccount=1)(kopanoAliases=%s))`.
+#### `LDAP_GROUP_BASE`
+
+The `LDAP_GROUP_BASE` is the base DNs at which to conduct the searches for groups. Example: `LDAP_GROUP_BASE=ou=groups,dc=example,dc=com`.
+
+#### `LDAP_QUERY_FILTER_ALIAS`
+
+This is the filter used to search the directory, where `%s` is a
+substitute for the address Postfix is trying to resolve. Example, only consider email aliases of users who also have `objectclass=posixAccount`; `LDAP_QUERY_FILTER_ALIAS=(&(objectclass=posixAccount)(aliases=%s))`.
 
 #### `LDAP_QUERY_FILTER_GROUP`, `LDAP_QUERY_FILTER_EXPAND`
 
 To deliver mails to a member of a group the email addresses of the individual must be resolved. For resolving group members use `LDAP_QUERY_FILTER_GROUP` and to expand group members’ mail into `uid` use `LDAP_QUERY_FILTER_EXPAND`.
 
-Example, only consider group mail from group who is of `objectclass=kopano-group`: `LDAP_QUERY_FILTER_GROUP=(&(objectclass=kopano-group)(mail=%s))` and then only consider user with matching `uid` how is of `objectclass=kopano-user`: `LDAP_QUERY_FILTER_EXPAND=(&(objectclass=kopano-user)(uid=%s))`.
+Example, only consider group mail from group who is of `objectclass=group`: `LDAP_QUERY_FILTER_GROUP=(&(objectclass=group)(mail=%s))` and then only consider user with matching `uid` who is of `objectclass=posixAccount`;  `LDAP_QUERY_FILTER_EXPAND=(&(objectclass=posixAccount)(uid=%s))`.
 
 #### `LDAP_BIND_DN`, `LDAP_BIND_PW`
 
