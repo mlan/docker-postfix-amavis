@@ -16,7 +16,8 @@ DOVECOT_CD=${DOVECOT_CD-$DOCKER_IMAP_DIR/conf.d}
 dc_dovecot_setup_docker() {
 	dc_dovecot_setup_conf
 	dc_dovecot_setup_auth
-	dc_dovecot_setup_debug
+#	dc_dovecot_setup_mbox
+#	dc_dovecot_setup_auth_debug
 }
 
 #
@@ -54,10 +55,19 @@ dc_dovecot_setup_auth() {
 }
 
 #
+# Configure dovecot mbox.
+#
+dc_dovecot_setup_mbox() {
+	cat <<-!cat > $DOVECOT_CD/10-mbox.conf
+		#protocols = imap
+		mail_location = mbox:~/mail:INBOX=/var/mail/%u
+	!cat
+}
+#
 # Configure dovecot to use passwd-file.
 #
-dc_dovecot_setup_debug() {
-	cat <<-!cat > $DOVECOT_CD/50-debug.conf
+dc_dovecot_setup_auth_debug() {
+	cat <<-!cat > $DOVECOT_CD/50-auth-debug.conf
 		auth_debug=yes
 		auth_debug_passwords=yes
 	!cat

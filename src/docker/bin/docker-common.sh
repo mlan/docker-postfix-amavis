@@ -114,6 +114,8 @@ dc_apk_versions() {
 	dc_log 5 $host $os $kern
 	for pkg in $pkgs; do
 		ver=$(apk info -s $pkg 2> /dev/null | sed -rn 's/.*-(.*)-.*/\1/p')
-		printf "\t%-${len}s\t%s\n" $pkg $ver
+		if [ -n "$ver" ]; then
+			printf "\t%-${len}s\t%s\n" $pkg $ver
+		fi
 	done
 }

@@ -52,6 +52,7 @@ LDAP_UOU ?= users
 LDAP_UOB ?= posixAccount
 LDAP_GOU ?= groups
 LDAP_MTH ?= "(&(objectclass=$(LDAP_UOB))(mail=%s))"
+LDAP_APW ?= uid=user
 
 CNT_NAME ?= postfix-amavis-mta
 CNT_PORT ?= -p 127.0.0.1:$(TST_PORT):25
@@ -154,26 +155,28 @@ test-up_2: test-up-net test-up-auth
 		-e MYDESTINATION= \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 
-test-up_3: test-up-net test-cert-gen
+test-up_3: test-up-net test-up-auth test-cert-gen
 	#
-	# test (3) basic tls
+	# test (3) ldap sasl and basic tls over smtps
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
-		-e MAIL_BOXES="$(TST_BOX)" \
+		-e LDAP_HOST=$(TST_AUTH) -e LDAP_USER_BASE=ou=$(LDAP_UOU),$(LDAP_BAS) \
+		-e LDAP_QUERY_FILTER_USER=$(LDAP_MTH) \
+		-e LDAP_QUERY_ATTRS_PASS=$(LDAP_APW) \
 		-e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT) \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
+		$(IMG_REPO):$(call _ver,$(IMG_VER),base)
 	docker cp $(TST_KEY) $(TST_SRV):$(TST_PKEY)
 	docker cp $(TST_CRT) $(TST_SRV):$(TST_PCRT)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
-		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e RELAYHOST=[$(TST_SRV):465] -e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 
 test-up_4: test-up-net test-cert-gen
 	#
-	# test (4) basic sasl and acme tls
+	# test (4) passwd-file sasl and acme tls over submission
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
@@ -288,9 +291,14 @@ test-auth-srv:
 test-mail-send_%:
 	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
 	printf "EHLO mua.$(TST_DOM)\nMAIL FROM: <$(TST_SADR)@$(TST_DOM)>\nRCPT TO: <$(TST_RADR)@$(tst_dom)>\nDATA\nFrom: <$(TST_SADR)@$(TST_DOM)>\nTo: <$(TST_RADR)@$(tst_dom)>\nDate: $$(date)\nSubject:Test\n\n$(TST_MSG)$*\n.\nQUIT\n" \
-	| docker exec -i $(TST_CLT) nc localhost 25
-#	printf "subject:Test\nfrom:$(TST_SADR)@$(TST_DOM)\n$(TST_MSG)$*\n" \
-#	| docker exec -i $(TST_CLT) sendmail $(TST_RADR)@$(tst_dom)
+	| tee /dev/tty | docker exec -i $(TST_CLT) nc localhost 25
+
+test-mail-send2_%:
+	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
+	@printf "From: <$(TST_SADR)@$(TST_DOM)>\nTo: <$(TST_RADR)@$(tst_dom)>\nSubject:Test\n\n$(TST_MSG)$*\n" \
+	| docker run -i --rm --network $(TST_NET) curlimages/curl -s -v -T - \
+	--mail-from $(TST_SADR)@$(TST_DOM) --mail-rcpt $(TST_RADR)@$(tst_dom) \
+	--url smtps://$(TST_SRV) -u $(TST_RADR):$(TST_PWD1) --ssl --anyauth -k
 
 test-mail-read_%:
 	$(eval tst_str := $(shell if [ $* -eq 6 ]; then echo DKIM-Signature; else echo ^$(TST_MSG)$*; fi ))

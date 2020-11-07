@@ -5,6 +5,7 @@
 - [demo](demo) Enable IMAP POP3 and CalDAV/iCAL in demo.
 - [docker](README.md) Update docker-compose example.
 - [docker](README.md) Update SMPTS SASL authentication sections.
+- [docker](Makefile) Prepare SASL tests.
 
 # 1.4.2
 
