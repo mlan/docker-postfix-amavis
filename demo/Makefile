@@ -10,7 +10,7 @@ _ip       = $(shell docker inspect -f \
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
 
-test: mta-test
+test: mta-test_smtp
 
 init: auth-init db-up mta-up app-up
 
@@ -103,9 +103,15 @@ auth-mod_hash:
 mta-bayes:
 	docker-compose exec mta sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis/.spamassassin && rm -rf bayesian.database'
 
-mta-test:
-	printf "EHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message\n\nGreat news! You can receive email.\n.\nQUIT\n" \
-	| nc -C localhost 25
+mta-test_smtp:
+	printf "From: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message\n\nGreat news! You can receive email.\n" \
+	| curl smtp://localhost -s -v -T - \
+	--mail-from test@example.biz --mail-rcpt $(LDAP_TEST_USER)@$(MAIL_DOMAIN)
+
+mta-test_smtp2:
+	printf "From: A info tester <test-info@example.biz>\nTo: <$(LDAP_TEST_USER)-info@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message \n\nGreat news! $(LDAP_TEST_USER)-info@$(MAIL_DOMAIN) can also receive email.\n" \
+	| curl smtp://localhost -s -v -T - \
+	--mail-from test@example.biz --mail-rcpt $(LDAP_TEST_USER)@$(MAIL_DOMAIN)
 
 mta-razor:
 	docker-compose exec mta run amavis_register_razor
@@ -173,7 +179,7 @@ app-man_server:
 app-man_ldap:
 	docker-compose exec app man kopano-ldap.cfg
 
-app-test_smtp: mta-test
+app-test_smtp: mta-test_smtp
 
 app-test_lmtp:
 	printf "LHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A LMTP test message from me to you\n\nDelete me, please \n.\nQUIT\n" | nc -C $(call _ip,$(COMPOSE_PROJECT_NAME)_app_1) 2003

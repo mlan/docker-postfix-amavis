@@ -9,6 +9,7 @@
 - [postfix](src/postfix) Check all required LDAP parameters in `postfix_setup_domains()`.
 - [postfix](src/postfix) Use `smtpd_reject_unlisted_recipient=no` in `postfix_setup_domains()`.
 - [dovecot](src/dovecot) Remove `smtps/inet/smtpd_recipient_restrictions` and rely on `smtpd_relay_restrictions` instead in `dovecot_setup_smtpd_sasl()`.
+- [postfix](src/postfix) Allow recipient email address to be rewritten using regexp in `REGEX_ALIAS`.
 
 # 1.4.2
 

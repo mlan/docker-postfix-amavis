@@ -11,6 +11,7 @@ DOCKER_DEFAULT_DOMAIN=${DOCKER_DEFAULT_DOMAIN-example.com}
 POSTFIX_VIRT_DOMAIN=${POSTFIX_VIRT_DOMAIN-$DOCKER_CONF_DIR/virt-domains}
 POSTFIX_VIRT_MAILBOX=${POSTFIX_VIRT_MAILBOX-$DOCKER_CONF_DIR/virt-users}
 POSTFIX_ALIASES=${POSTFIX_ALIASES-$DOCKER_CONF_DIR/aliases}
+POSTFIX_REGEXP_ALIASES=${POSTFIX_REGEXP_ALIASES-$DOCKER_CONF_DIR/regexp-aliases}
 POSTFIX_SASL_PASSWD=${POSTFIX_SASL_PASSWD-$DOCKER_CONF_DIR/sasl-passwords}
 POSTFIX_LDAP_USERS_CF=${POSTFIX_LDAP_USERS_CF-$DOCKER_CONF_DIR/ldap-users.cf}
 POSTFIX_LDAP_ALIAS_CF=${POSTFIX_LDAP_ALIAS_CF-$DOCKER_CONF_DIR/ldap-aliases.cf}
@@ -67,6 +68,15 @@ postfix_setup_domains() {
 }
 
 #
+# Set default postfix alias maps
+#
+postfix_default_aliasmap() {
+	postconf virtual_ldap_alias_maps=
+	postconf virtual_regexp_alias_maps=
+	postconf 'virtual_alias_maps=$virtual_ldap_alias_maps $virtual_regexp_alias_maps'
+}
+
+#
 # Setup postfix aliases
 # MAIL_ALIASES="alias1:target1a,target1b alias2:target2"
 #
@@ -85,6 +95,18 @@ postfix_setup_aliasmap() {
 		dc_log 7 "No postfix aliases defined"
 		postconf alias_maps=
 		postconf alias_database=
+	fi
+}
+
+#
+# Allow recipient email address to be rewritten using regexp in REGEX_ALIAS
+#
+postfix_setup_regex_aliasmap() {
+	if [ -n "$REGEX_ALIAS" ]; then
+		dc_log 5 "Configuring recipient address rewrite using regexp: $REGEX_ALIAS"
+		echo "$REGEX_ALIAS" > $POSTFIX_REGEXP_ALIASES
+		postmap $POSTFIX_REGEXP_ALIASES
+		postconf "virtual_regexp_alias_maps=regexp:$POSTFIX_REGEXP_ALIASES"
 	fi
 }
 
@@ -121,11 +143,11 @@ postfix_setup_mailbox_ldap() {
 		if [ -n "$LDAP_QUERY_FILTER_ALIAS" ]; then
 			_postfix_generate_ldapmap "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_ALIAS" > $POSTFIX_LDAP_ALIAS_CF
 			if [ -n "$LDAP_GROUP_BASE" -a -n "$LDAP_QUERY_FILTER_GROUP" -a -n "$LDAP_QUERY_FILTER_EXPAND" ]; then
-				postconf virtual_alias_maps="ldap:$POSTFIX_LDAP_ALIAS_CF, ldap:$POSTFIX_LDAP_GROUPS_CF, ldap:$POSTFIX_LDAP_EXPAND_CF"
+				postconf "virtual_ldap_alias_maps=ldap:$POSTFIX_LDAP_ALIAS_CF ldap:$POSTFIX_LDAP_GROUPS_CF ldap:$POSTFIX_LDAP_EXPAND_CF"
 				_postfix_generate_ldapmap "$LDAP_GROUP_BASE" memberUid "$LDAP_QUERY_FILTER_GROUP" > $POSTFIX_LDAP_GROUPS_CF
 				_postfix_generate_ldapmap "$LDAP_GROUP_BASE" mail "$LDAP_QUERY_FILTER_EXPAND" > $POSTFIX_LDAP_EXPAND_CF
 			else
-				postconf virtual_alias_maps=ldap:$POSTFIX_LDAP_ALIAS_CF
+				postconf "virtual_ldap_alias_maps=ldap:$POSTFIX_LDAP_ALIAS_CF"
 			fi
 		fi
 		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxes

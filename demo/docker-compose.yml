@@ -58,6 +58,7 @@ services:
       - LDAP_USER_BASE=ou=${LDAP_USEROU-users},${LDAP_BASE-dc=example,dc=com}
       - LDAP_QUERY_FILTER_USER=(&(objectclass=${LDAP_USEROBJ-posixAccount})(mail=%s))
       - LDAP_QUERY_ATTRS_PASS=uid=user
+      - REGEX_ALIAS=${REGEX_ALIAS-}
       - DKIM_SELECTOR=${DKIM_SELECTOR-default}
       - SA_TAG_LEVEL_DEFLT=${SA_TAG_LEVEL_DEFLT-2.0}
       - SA_DEBUG=${SA_DEBUG-0}

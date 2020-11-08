@@ -339,7 +339,7 @@ test-conf_%:
 	$(eval tst_spro := $(shell if [ $* -eq 3 ]; then echo smtps; else echo smtp; fi ))
 
 test-mail-send_%: test-conf_%
-	@printf "From: <$(TST_SADR)@$(TST_DOM)>\nTo: <$(TST_RADR)@$(tst_dom)>\nSubject:Test\n\n$(TST_MSG)$*\n" \
+	@printf "From: <$(TST_SADR)@$(TST_DOM)>\nTo: <$(TST_RADR)@$(tst_dom)>\nDate: $$(date)\nSubject:Test\n\n$(TST_MSG)$*\n" \
 	| docker run -i --rm --network $(TST_NET) curlimages/curl -s -T - $(CURL_DBG) \
 	--mail-from $(TST_SADR)@$(TST_DOM) --mail-rcpt $(TST_RADR)@$(tst_dom) \
 	--url $(tst_spro)://$(TST_CLT) -u $(TST_RADR):$(TST_PWD1) --ssl --anyauth -k

@@ -515,8 +515,14 @@ Example, only consider group mail from group who is of `objectclass=group`: `LDA
 
 The defaults for these environment variables are empty. If you do have to bind, do it with this distinguished name and password. Example: `LDAP_BIND_DN=uid=admin,dc=example,dc=com`, `LDAP_BIND_PW=secret`.
 
+## Rewrite recipient email address `REGEX_ALIAS`
+
+The recipient email address can be rewritten using [regular expressions](https://en.wikipedia.org/wiki/Regular_expression) in `REGEX_ALIAS`. This can be useful in some situations.
+
+For example, assume you want email addresses like `user+info@domain.com` and `user-news@domain.com` to be forwarded to `user@domain.com`. This can be achieved by setting `REGEX_ALIAS='/([^+]+)[+-].*@(.+)/ $1@$2'`. The user can now, with the mail client, arrange filters to sort email into sub folders.
 
 ## Delivery transport
+
 The `mlan/postfix-amavis` image is designed primarily to work with a companion software which holds the mail boxes. That is, Postfix is not intended to be used for final delivery.
 
 #### `VIRTUAL_TRANSPORT`
