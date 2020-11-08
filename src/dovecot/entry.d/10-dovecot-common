@@ -39,9 +39,9 @@ dovecot_setup_smtpd_sasl() {
 	postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous"
 	postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
 	postconf -P "submission/inet/smtpd_tls_auth_only=yes"
+	postconf -P "submission/inet/smtpd_reject_unlisted_recipient=no"
 	postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
-	postconf -P "submission/inet/smtpd_recipient_restrictions=permit_auth_destination,reject"
-#	postconf -P "submission/inet/smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject"
+	# enable sasl auth on the smtps port
 	postconf -M "smtps/inet=smtps inet n - n - - smtpd"
 	postconf -P "smtps/inet/syslog_name=postfix/smtps"
 	postconf -P "smtps/inet/smtpd_sasl_auth_enable=yes"
@@ -50,10 +50,9 @@ dovecot_setup_smtpd_sasl() {
 	postconf -P "smtps/inet/smtpd_sasl_security_options=noanonymous"
 	postconf -P "smtps/inet/smtpd_tls_security_level=encrypt"
 	postconf -P "smtps/inet/smtpd_tls_auth_only=yes"
+	postconf -P "smtps/inet/smtpd_reject_unlisted_recipient=no"
 	postconf -P "smtps/inet/smtpd_tls_wrappermode=yes"
 	postconf -P "smtps/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
-	postconf -P "smtps/inet/smtpd_recipient_restrictions=permit_auth_destination,reject"
-#	postconf -P "smtps/inet/smtpd_reject_unlisted_recipient=yes"
 	if dc_is_installed amavisd-new; then
 		postconf -P "submission/inet/cleanup_service_name=pre-cleanup"
 		postconf -P "smtps/inet/cleanup_service_name=pre-cleanup"

@@ -51,7 +51,7 @@ postfix_default_domains() {
 #
 postfix_setup_domains() {
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
-	if [ -n "$domains" ] && ([ -n "$LDAP_HOST" ] || [ -n "$MAIL_BOXES" ]); then
+	if [ -n "$domains" ] && ([ -n "$MAIL_BOXES" ] || ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ])); then
 		dc_log 5 "Configuring postfix for domains $domains"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
 			for domain in $domains; do

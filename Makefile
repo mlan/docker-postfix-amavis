@@ -37,6 +37,7 @@ TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) \
 TST_MSG  ?= ---test-message---
 TST_KEY  ?= test/tmp/local_priv_key.pem
 TST_CRT  ?= test/tmp/local_ca_cert.pem
+TST_TLS  ?= -e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT)
 TST_ACME ?= test/tmp/acme/acme.json
 TST_ATLS ?= -e ACME_FILE=/acme/acme.json -v $(shell pwd)/$(shell dirname $(TST_ACME)):/acme
 TST_CRTD ?= 30
@@ -47,12 +48,18 @@ TST_PWD1 ?= password1
 TST_USR2 ?= client2
 TST_PWD2 ?= password2
 TST_DK_S ?= default
+TST_ADBA ?= -e LDAP_HOST=$(TST_AUTH) -e LDAP_USER_BASE=ou=$(LDAP_UOU),$(LDAP_BAS)
+TST_ADLU ?= $(TST_ADBA) -e LDAP_QUERY_FILTER_USER=$(LDAP_FOU)
+TST_ADAU ?= $(TST_ADBA) -e LDAP_QUERY_ATTRS_PASS=$(LDAP_APW) -e LDAP_QUERY_FILTER_PASS=$(LDAP_FPW)
+TST_ADAL ?= $(TST_ADLU) -e LDAP_QUERY_ATTRS_PASS=$(LDAP_APW)
 LDAP_BAS ?= dc=example,dc=com
 LDAP_UOU ?= users
 LDAP_UOB ?= posixAccount
 LDAP_GOU ?= groups
-LDAP_MTH ?= "(&(objectclass=$(LDAP_UOB))(mail=%s))"
+LDAP_FOU ?= "(&(objectclass=$(LDAP_UOB))(mail=%s))"
+LDAP_FPW ?= "(&(objectclass=$(LDAP_UOB))(uid=%u))"
 LDAP_APW ?= uid=user
+CURL_DBG ?=
 
 CNT_NAME ?= postfix-amavis-mta
 CNT_PORT ?= -p 127.0.0.1:$(TST_PORT):25
@@ -105,7 +112,11 @@ test_%: test-up_% test-waitl_% test-logs_% test-mail_% test-down_%
 
 test-up_0:
 	#
+	#
 	# test (0) run without envvars (is there smoke?)
+	#
+	# run containers see if there are logs and stop.
+	#
 	#
 	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 	sleep $(TST_W8L1)
@@ -123,12 +134,19 @@ test-up_0:
 	docker stop $(TST_SRV)
 	sleep $(TST_W8S1)
 	#
+	#
 	# test (0) successful
+	#
 	#
 
 test-up_1: test-up-net
 	#
+	#
 	# test (1) basic mta function and virtual lookup
+	#
+	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox
+	# recv: cat srv postfix mbox
+	#
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
@@ -136,47 +154,54 @@ test-up_1: test-up-net
 		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) -e MAIL_ALIASES="$(TST_ALS)" \
-		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
-		-e MYDESTINATION= \
+		-e RELAYHOST=[$(TST_SRV)] -e MYDESTINATION= \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 
-test-up_2: test-up-net test-up-auth
+test-up_2: test-up-net test-up-auth_2
+	#
 	#
 	# test (2) basic mta function and ldap lookup
 	#
+	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox
+	# recv: cat srv postfix mbox
+	#
+	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e LDAP_HOST=$(TST_AUTH) -e LDAP_USER_BASE=ou=$(LDAP_UOU),$(LDAP_BAS) \
-		-e LDAP_QUERY_FILTER_USER=$(LDAP_MTH) \
+		--network $(TST_NET) $(TST_ENV) $(TST_ADLU) \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
-		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
-		-e MYDESTINATION= \
+		-e RELAYHOST=[$(TST_SRV)] -e MYDESTINATION= \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 
-test-up_3: test-up-net test-up-auth test-cert-gen
+test-up_3: test-up-net test-up-auth_3 test-cert-gen
 	#
-	# test (3) ldap sasl and basic tls over smtps
+	#
+	# test (3) ldap sasl, basic and selfsigned tls over smtps, subm w ldap lookup
+	#
+	# send: curl smtps://clt -> clt smtps://srv:587 -> srv var/mail/<mbox>
+	# recv: cat /var/mail/<mbox>
+	#
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e LDAP_HOST=$(TST_AUTH) -e LDAP_USER_BASE=ou=$(LDAP_UOU),$(LDAP_BAS) \
-		-e LDAP_QUERY_FILTER_USER=$(LDAP_MTH) \
-		-e LDAP_QUERY_ATTRS_PASS=$(LDAP_APW) \
-		-e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT) \
+		--network $(TST_NET) $(TST_ENV) $(TST_ADAL) $(TST_TLS) \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),base)
 	docker cp $(TST_KEY) $(TST_SRV):$(TST_PKEY)
 	docker cp $(TST_CRT) $(TST_SRV):$(TST_PCRT)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e RELAYHOST=[$(TST_SRV):465] -e INET_INTERFACES=loopback-only \
-		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
+		--network $(TST_NET) $(TST_ENV) $(TST_ADAU) \
+		-e SMTP_RELAY_HOSTAUTH="[$(TST_SRV)]:587 $(TST_RADR):$(TST_PWD1)" -e MYDESTINATION= \
+		-e SMTP_TLS_SECURITY_LEVEL=encrypt -e SMTPD_USE_TLS=yes \
+		$(IMG_REPO):$(call _ver,$(IMG_VER),base)
 
 test-up_4: test-up-net test-cert-gen
 	#
-	# test (4) passwd-file sasl and acme tls over submission
+	#
+	# test (4) passwd-file sasl and acme tls over subm
+	#
+	# send: curl smtp://clt -> clt smtps://srv:587 -> srv var/mail/<mbox>
+	# recv: cat /var/mail/<mbox>
+	#
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
@@ -186,13 +211,17 @@ test-up_4: test-up-net test-cert-gen
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
 		-e SMTP_RELAY_HOSTAUTH="[$(TST_SRV)]:587 $(TST_USR2):$(TST_PWD2)" \
-		-e INET_INTERFACES=loopback-only \
 		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
 
 test-up_5: test-up-net
 	#
+	#
 	# test (5) basic milter function and selfsigned tls
+	#
+	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
+	# recv: cat /var/mail/<mbox>
+	#
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
@@ -200,13 +229,18 @@ test-up_5: test-up-net
 		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
-		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e RELAYHOST=[$(TST_SRV)] \
 		-e MYDESTINATION= -e LOG_LEVEL=$(TST_ALOG) \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
 
 test-up_6: test-up-net
 	#
+	#
 	# test (6) dkim and multiple domains
+	#
+	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
+	# recv: cat /var/mail/<mbox>
+	#
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
@@ -215,14 +249,19 @@ test-up_6: test-up-net
 		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) -e DKIM_SELECTOR=$(TST_DK_S) \
-		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e RELAYHOST=[$(TST_SRV)] \
 		-e MYDESTINATION= -e MAIL_DOMAIN="$(TST_DOM)" \
 		-v $(TST_CLT)-srv:/srv \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
 
 test-up_7: test-up-net test_6
 	#
+	#
 	# test (7) persistent /srv no env given
+	#
+	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
+	# recv: cat /var/mail/<mbox>
+	#
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) \
@@ -235,7 +274,12 @@ test-up_7: test-up-net test_6
 
 test-up_8: test-up-net test_7
 	#
+	#
 	# test (8) persistent /srv FORCE_CONFIG
+	#
+	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
+	# recv: cat /var/mail/<mbox>
+	#
 	#
 	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) -e FORCE_CONFIG=true \
@@ -244,7 +288,7 @@ test-up_8: test-up-net test_7
 		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
 	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
 		--network $(TST_NET) $(TST_ENV) \
-		-e RELAYHOST=[$(TST_SRV)] -e INET_INTERFACES=loopback-only \
+		-e RELAYHOST=[$(TST_SRV)] \
 		-e MYDESTINATION= -e MAIL_DOMAIN="$(TST_DOM)" \
 		-v $(TST_CLT)-srv:/srv \
 		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
@@ -253,17 +297,19 @@ test-mail: test-mail_0
 
 test-mail_%: test-mail-send_% test-waits_% test-mail-read_%
 	#
+	#
 	# test ($*) successful
+	#
 	#
 
 test-logs_%:
 	docker container logs $(TST_SRV) | grep 'docker-entrypoint.sh' || true
 
 test-waits_%:
-	if [ $* -ge 5 ]; then sleep $(TST_W8S2); else sleep $(TST_W8S1); fi
+	case $* in [1-4]) sleep $(TST_W8S1);; *) sleep $(TST_W8S2);; esac
 
 test-waitl_%:
-	if [ $* -ge 5 ]; then sleep $(TST_W8L2); else sleep $(TST_W8L1); fi
+	case $* in [1-4]) sleep $(TST_W8L1);; *) sleep $(TST_W8L2);; esac
 
 test-up-net:
 	docker network create $(TST_NET) 2>/dev/null || true
@@ -279,7 +325,7 @@ test-down_%:
 	docker stop $(TST_CLT) $(TST_SRV) $(TST_AUTH) 2>/dev/null || true
 	if [ $* -ge 0 ]; then sleep $(TST_W8S1); fi
 
-test-up-auth:
+test-up-auth_%:
 	docker run --rm -d --name $(TST_AUTH) --network $(TST_NET) mlan/openldap
 	sleep $(TST_W8L1)
 	printf "dn: ou=$(LDAP_UOU),$(LDAP_BAS)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_UOU)\n\ndn: ou=$(LDAP_GOU),$(LDAP_BAS)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_GOU)\n\ndn: uid=$(TST_RADR),ou=$(LDAP_UOU),$(LDAP_BAS)\nchangetype: add\nobjectClass: top\nobjectClass: inetOrgPerson\nobjectClass: $(LDAP_UOB)\ncn: $(TST_RADR)\nsn: $(TST_RADR)\nuid: $(TST_RADR)\nmail: $(TST_RADR)@$(TST_DOM)\nuidNumber: 1234\ngidNumber: 1234\nhomeDirectory: /home/$(TST_RADR)\nuserPassword: $(TST_PWD1)\n" \
@@ -288,17 +334,15 @@ test-up-auth:
 test-auth-srv:
 	docker exec -it $(TST_SRV) doveadm auth lookup $(TST_USR2)
 
-test-mail-send_%:
+test-conf_%:
 	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
-	printf "EHLO mua.$(TST_DOM)\nMAIL FROM: <$(TST_SADR)@$(TST_DOM)>\nRCPT TO: <$(TST_RADR)@$(tst_dom)>\nDATA\nFrom: <$(TST_SADR)@$(TST_DOM)>\nTo: <$(TST_RADR)@$(tst_dom)>\nDate: $$(date)\nSubject:Test\n\n$(TST_MSG)$*\n.\nQUIT\n" \
-	| tee /dev/tty | docker exec -i $(TST_CLT) nc localhost 25
+	$(eval tst_spro := $(shell if [ $* -eq 3 ]; then echo smtps; else echo smtp; fi ))
 
-test-mail-send2_%:
-	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
+test-mail-send_%: test-conf_%
 	@printf "From: <$(TST_SADR)@$(TST_DOM)>\nTo: <$(TST_RADR)@$(tst_dom)>\nSubject:Test\n\n$(TST_MSG)$*\n" \
-	| docker run -i --rm --network $(TST_NET) curlimages/curl -s -v -T - \
+	| docker run -i --rm --network $(TST_NET) curlimages/curl -s -T - $(CURL_DBG) \
 	--mail-from $(TST_SADR)@$(TST_DOM) --mail-rcpt $(TST_RADR)@$(tst_dom) \
-	--url smtps://$(TST_SRV) -u $(TST_RADR):$(TST_PWD1) --ssl --anyauth -k
+	--url $(tst_spro)://$(TST_CLT) -u $(TST_RADR):$(TST_PWD1) --ssl --anyauth -k
 
 test-mail-read_%:
 	$(eval tst_str := $(shell if [ $* -eq 6 ]; then echo DKIM-Signature; else echo ^$(TST_MSG)$*; fi ))
@@ -318,6 +362,12 @@ $(TST_ACME): $(TST_CRT)
 
 test-cert-rm:
 	rm $(TST_KEY) $(TST_CRT) $(TST_ACME)
+
+test-env-clt:
+	docker exec -it $(TST_CLT) env
+
+test-env-srv:
+	docker exec -it $(TST_SRV) env
 
 test-logs-clt:
 	docker container logs $(TST_CLT)
