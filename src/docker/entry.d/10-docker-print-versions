@@ -2,4 +2,4 @@
 #
 # 10-docker-print-versions
 #
-dc_apk_versions postfix dovecot amavisd-new spamassassin clamav
+dc_pkg_versions postfix dovecot amavisd-new spamassassin clamav

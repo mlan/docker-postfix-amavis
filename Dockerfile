@@ -90,7 +90,7 @@ RUN	source docker-common.sh \
 	&& chown ${DOCKER_APPL_RUNAS}: ${DOCKER_PERSIST_DIR}$DOCKER_MAIL_LIB \
 	&& mv $DOCKER_CONF_DIR/aliases $DOCKER_CONF_DIR/aliases.dist \
 	&& postconf -e mynetworks_style=subnet \
-	&& echo "This file ulocks the configuration, so it will be deleted after initialization." > $DOCKER_UNLOCK_FILE
+	&& echo "This file unlocks the configuration, so it will be deleted after initialization." > $DOCKER_UNLOCK_FILE
 
 #
 # state standard smtp, smtps and submission ports

@@ -2,7 +2,7 @@
 #
 # docker-service.sh
 #
-source docker-common.sh
+. docker-common.sh
 
 # use /etc/service if $SVDIR not already defined
 SVDIR=${SVDIR-/etc/service}

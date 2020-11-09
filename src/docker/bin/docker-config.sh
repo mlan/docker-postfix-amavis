@@ -239,6 +239,6 @@ dc_lock_config() {
 }
 
 #
-# true if there is no lock file or FORCE_CONFIG is not empty
+# true if there is no unlock file or FORCE_CONFIG is not empty
 #
 dc_is_unlocked() { [ -f "$DOCKER_UNLOCK_FILE" ] || [ -n "$FORCE_CONFIG" ] ;}

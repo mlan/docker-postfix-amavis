@@ -6,9 +6,9 @@
 #
 
 #
-# source common functions
+# Source common functions.
 #
-source docker-common.sh
+. docker-common.sh
 
 #
 # dr_docker_call_func "$@"

@@ -18,8 +18,8 @@ SVDIR=${SVDIR-/etc/service}
 #
 # Source common functions.
 #
-source docker-common.sh
-source docker-config.sh
+. docker-common.sh
+. docker-config.sh
 
 #
 # Functions
