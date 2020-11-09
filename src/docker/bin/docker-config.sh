@@ -230,9 +230,11 @@ dc_tls_setup_selfsigned_cert() {
 # Configuration Lock
 #
 dc_lock_config() {
-	if dc_is_unlocked; then
+	if [ -f "$DOCKER_UNLOCK_FILE" ]; then
 		rm $DOCKER_UNLOCK_FILE
 		dc_log 5 "Removing unlock file, locking the configuration."
+	elif [ -n "$FORCE_CONFIG" ]; then
+		dc_log 5 "Configuration update was forced, since we got FORCE_CONFIG=$FORCE_CONFIG"
 	else
 		dc_log 5 "No unlock file found, so not touching configuration."
 	fi

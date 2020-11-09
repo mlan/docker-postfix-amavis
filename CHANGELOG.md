@@ -11,6 +11,7 @@
 - [dovecot](src/dovecot) Remove `smtps/inet/smtpd_recipient_restrictions` and rely on `smtpd_relay_restrictions` instead in `dovecot_setup_smtpd_sasl()`.
 - [postfix](src/postfix) Allow recipient email address to be rewritten using regexp in `REGEX_ALIAS`.
 - [docker](src/docker/bin/docker-common.sh) Print package versions function `dc_pkg_versions()` now supports both apk and apt.
+- [docker](src/docker/bin/docker-config.sh) Better log message when `FORCE_CONFIG` active.
 
 # 1.4.2
 

@@ -1,6 +1,7 @@
 -include    *.mk .env .init.env
 
 srv_list ?= auth app db mta
+curl_dbg ?= -v
 _ip       = $(shell docker inspect -f \
 	'{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
 	$(1) | head -n1)
@@ -10,7 +11,7 @@ _ip       = $(shell docker inspect -f \
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
 
-test: mta-test_smtp
+test: mta-test_quiet mta-test_smtp
 
 init: auth-init db-up mta-up app-up
 
@@ -103,14 +104,17 @@ auth-mod_hash:
 mta-bayes:
 	docker-compose exec mta sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis/.spamassassin && rm -rf bayesian.database'
 
+mta-test_quiet:
+	$(eval curl_dbg := )
+
 mta-test_smtp:
 	printf "From: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message\n\nGreat news! You can receive email.\n" \
-	| curl smtp://localhost -s -v -T - \
+	| curl smtp://localhost -s -T - $(curl_dbg) \
 	--mail-from test@example.biz --mail-rcpt $(LDAP_TEST_USER)@$(MAIL_DOMAIN)
 
 mta-test_smtp2:
 	printf "From: A info tester <test-info@example.biz>\nTo: <$(LDAP_TEST_USER)-info@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message \n\nGreat news! $(LDAP_TEST_USER)-info@$(MAIL_DOMAIN) can also receive email.\n" \
-	| curl smtp://localhost -s -v -T - \
+	| curl smtp://localhost -s -T - $(curl_dbg) \
 	--mail-from test@example.biz --mail-rcpt $(LDAP_TEST_USER)@$(MAIL_DOMAIN)
 
 mta-razor:
@@ -144,6 +148,12 @@ mta-show_doveconf:
 
 mta-show_postconf:
 	docker-compose exec mta postconf -n
+
+mta-show_mailq:
+	docker-compose exec mta mailq
+
+mta-flush_mailq:
+	docker-compose exec mta postqueue -f
 
 mta-hostaddr:
 	$(eval myhost := $(call _ip,$(COMPOSE_PROJECT_NAME)_mta_1))
@@ -179,13 +189,13 @@ app-man_server:
 app-man_ldap:
 	docker-compose exec app man kopano-ldap.cfg
 
-app-test_smtp: mta-test_smtp
-
-app-test_lmtp:
-	printf "LHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A LMTP test message from me to you\n\nDelete me, please \n.\nQUIT\n" | nc -C $(call _ip,$(COMPOSE_PROJECT_NAME)_app_1) 2003
-
 app-hostaddr:
 	$(eval myhost := $(call _ip,$(COMPOSE_PROJECT_NAME)_app_1))
+
+app-test_smtp: mta-test_smtp
+
+app-test_lmtp: app-hostaddr
+	printf "LHLO mx\nMAIL FROM: <test@example.biz>\nRCPT TO: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDATA\nFrom: A tester <test@example.biz>\nTo: <$(LDAP_TEST_USER)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A LMTP test message from me to you\n\nDelete me, please \n.\nQUIT\n" | nc -C $(myhost) 2003
 
 app-test_imap: app-hostaddr
 	curl imap://$(myhost) -X CAPABILITY
