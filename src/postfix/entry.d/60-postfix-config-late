@@ -13,7 +13,7 @@
 if dc_is_unlocked; then
 	postfix_setup_domains
 	postfix_setup_smtp_auth
-	postfix_setup_mailbox_hash
+	postfix_setup_mailbox_lmdb
 	postfix_setup_mailbox_ldap
 	postfix_default_aliasmap
 	postfix_setup_aliasmap

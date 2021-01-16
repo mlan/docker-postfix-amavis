@@ -88,7 +88,7 @@ services:
       - /etc/localtime:/etc/localtime:ro        # Use host timezone
 
   auth:
-    image: mlan/openldap
+    image: mlan/openldap:1
     networks:
       - backend
     environment:

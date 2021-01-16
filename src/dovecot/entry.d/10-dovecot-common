@@ -28,7 +28,7 @@ dovecot_setup_postfix() {
 # Configure postfix sasl auth to use dovecot.
 #
 dovecot_setup_smtpd_sasl() {
-	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
+#	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	dc_log 5 "Enabling postfix-dovecot client SASL via submission"
 	# enable sasl auth on the submission port
 	postconf -M "submission/inet=submission inet n - n - - smtpd"
@@ -53,7 +53,7 @@ dovecot_setup_smtpd_sasl() {
 	postconf -P "smtps/inet/smtpd_reject_unlisted_recipient=no"
 	postconf -P "smtps/inet/smtpd_tls_wrappermode=yes"
 	postconf -P "smtps/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
-	if dc_is_installed amavisd-new; then
+	if dc_is_installed amavis; then
 		postconf -P "submission/inet/cleanup_service_name=pre-cleanup"
 		postconf -P "smtps/inet/cleanup_service_name=pre-cleanup"
 	fi

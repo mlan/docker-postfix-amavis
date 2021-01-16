@@ -81,7 +81,7 @@ RUN	source docker-common.sh \
 	runit \
 	postfix \
 	postfix-ldap \
-	cyrus-sasl-plain \
+#	cyrus-sasl-plain \ # moved back into libsasl
 	cyrus-sasl-login \
 	&& docker-service.sh \
 	"syslogd -nO- -l$SYSLOG_LEVEL $SYSLOG_OPTIONS" \
@@ -136,6 +136,7 @@ FROM	mini AS base
 RUN	apk --no-cache --update add \
 	dovecot \
 	dovecot-ldap \
+	dovecot-lmtpd \
 	jq \
 	&& docker-service.sh "dovecot -F" \
 	&& rm -f /etc/ssl/dovecot/* \
@@ -163,9 +164,13 @@ FROM	base AS full
 # amavis ignores ipv4 unless it is bound to localhost
 # make amavis use clamav
 #
+# amavis: new name of amavisd-new
+# perl-db: amavis dependency omitted since use of bdb is discouraged
+#
 
 RUN	apk --no-cache --update add \
-	amavisd-new \
+	amavis \
+	perl-db \
 	spamassassin \
 	perl-mail-spf \
 	razor \

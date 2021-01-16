@@ -1,6 +1,6 @@
 -include    *.mk
 
-BLD_ARG  ?= --build-arg DIST=alpine --build-arg REL=3.12.1
+BLD_ARG  ?= --build-arg DIST=alpine --build-arg REL=3.13
 BLD_REPO ?= mlan/postfix-amavis
 BLD_VER  ?= latest
 
@@ -102,7 +102,7 @@ ps:
 	docker ps -a
 
 prune:
-	docker image prune
+	docker image prune -f
 
 test-all: test-up_0 test_1 test_2 test_3 test_4 test_5 test_6 test_7 test_8
 	
@@ -322,11 +322,11 @@ test-down: test-down_0
 	docker volume rm $(TST_SRV)-srv $(TST_CLT)-srv 2>/dev/null || true
 
 test-down_%:
-	docker stop $(TST_CLT) $(TST_SRV) $(TST_AUTH) 2>/dev/null || true
+	docker rm -f $(TST_CLT) $(TST_SRV) $(TST_AUTH) 2>/dev/null || true
 	if [ $* -ge 0 ]; then sleep $(TST_W8S1); fi
 
 test-up-auth_%:
-	docker run --rm -d --name $(TST_AUTH) --network $(TST_NET) mlan/openldap
+	docker run --rm -d --name $(TST_AUTH) --network $(TST_NET) mlan/openldap:1
 	sleep $(TST_W8L1)
 	printf "dn: ou=$(LDAP_UOU),$(LDAP_BAS)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_UOU)\n\ndn: ou=$(LDAP_GOU),$(LDAP_BAS)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_GOU)\n\ndn: uid=$(TST_RADR),ou=$(LDAP_UOU),$(LDAP_BAS)\nchangetype: add\nobjectClass: top\nobjectClass: inetOrgPerson\nobjectClass: $(LDAP_UOB)\ncn: $(TST_RADR)\nsn: $(TST_RADR)\nuid: $(TST_RADR)\nmail: $(TST_RADR)@$(TST_DOM)\nuidNumber: 1234\ngidNumber: 1234\nhomeDirectory: /home/$(TST_RADR)\nuserPassword: $(TST_PWD1)\n" \
 	| docker exec -i $(TST_AUTH) ldap modify

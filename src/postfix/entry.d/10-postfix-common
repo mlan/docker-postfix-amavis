@@ -58,8 +58,8 @@ postfix_setup_domains() {
 			for domain in $domains; do
 				dc_cond_append $POSTFIX_VIRT_DOMAIN "$domain #domain"
 			done
-			postconf virtual_mailbox_domains=hash:$POSTFIX_VIRT_DOMAIN
-			postmap  hash:$POSTFIX_VIRT_DOMAIN
+			postconf virtual_mailbox_domains=lmdb:$POSTFIX_VIRT_DOMAIN
+			postmap  lmdb:$POSTFIX_VIRT_DOMAIN
 		else
 			postconf mydomain=$domains
 			postconf virtual_mailbox_domains='$mydomain'
@@ -87,8 +87,8 @@ postfix_setup_aliasmap() {
 		for aliasmap in $aliasmaps; do
 			dc_cond_append $POSTFIX_ALIASES $(echo "$aliasmap" | sed 's/[:,]/& /g')
 		done
-		postconf alias_maps=hash:$POSTFIX_ALIASES
-		postconf alias_database=hash:$POSTFIX_ALIASES
+		postconf alias_maps=lmdb:$POSTFIX_ALIASES
+		postconf alias_database=lmdb:$POSTFIX_ALIASES
 		postalias $POSTFIX_ALIASES
 		newaliases
 	else
@@ -122,10 +122,10 @@ postfix_setup_smtp_auth() {
 		postconf -e relayhost=$host
 		if [ -n "$auth" ]; then
 			postconf -e smtp_sasl_auth_enable=yes
-			postconf -e smtp_sasl_password_maps=hash:$POSTFIX_SASL_PASSWD
+			postconf -e smtp_sasl_password_maps=lmdb:$POSTFIX_SASL_PASSWD
 			postconf -e smtp_sasl_security_options=noanonymous
 			echo "$hostauth" > $POSTFIX_SASL_PASSWD
-			postmap hash:$POSTFIX_SASL_PASSWD
+			postmap lmdb:$POSTFIX_SASL_PASSWD
 		fi
 	else
 		dc_log 7 "No SMTP relay defined"
@@ -185,9 +185,9 @@ _postfix_generate_ldapmap() {
 }
 
 #
-# Setup hash mailboxes
+# Setup lmdb mailboxes
 #
-postfix_setup_mailbox_hash() {
+postfix_setup_mailbox_lmdb() {
 	local emails="${1-$MAIL_BOXES}"
 	if [ -n "$emails" ]; then
 		dc_log 5 "Configuring postfix-virt-mailboxes"
@@ -196,8 +196,8 @@ postfix_setup_mailbox_hash() {
 		done
 #		postconf alias_maps=
 #		postconf alias_database=
-		postconf virtual_mailbox_maps=hash:$POSTFIX_VIRT_MAILBOX
-		postmap hash:$POSTFIX_VIRT_MAILBOX
+		postconf virtual_mailbox_maps=lmdb:$POSTFIX_VIRT_MAILBOX
+		postmap lmdb:$POSTFIX_VIRT_MAILBOX
 		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
 			mkdir -p $DOCKER_MAIL_LIB
 			dc_chowncond $DOCKER_APPL_RUNAS $DOCKER_MAIL_LIB

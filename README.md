@@ -6,12 +6,12 @@
 ![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=flat-square&logo=docker)
 ![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=flat-square&logo=docker)
 
-This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](https://en.wikipedia.org/wiki/Message_transfer_agent) (SMTP) service using [Postfix](http://www.postfix.org/) and [Dovecot](https://www.dovecot.org/) with [anti-spam](https://en.wikipedia.org/wiki/Anti-spam_techniques) and anti-virus filter using [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [ClamAV](https://www.clamav.net/), which also provides sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
+This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](https://en.wikipedia.org/wiki/Message_transfer_agent) (SMTP) service using [Postfix](http://www.postfix.org/) and [Dovecot](https://www.dovecot.org/) with [anti-spam](https://en.wikipedia.org/wiki/Anti-spam_techniques) and anti-virus filter using [amavis](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [ClamAV](https://www.clamav.net/), which also provides sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
 
 ## Features
 
 - MTA (SMTP) server and client [Postfix](http://www.postfix.org/)
-- Anti-spam filter [amavisd-new](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/)
+- Anti-spam filter [amavis](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/)
 - Anti-virus [ClamAV](https://www.clamav.net/)
 - Sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail)
 - SMTP client authentication on the SMTPS (port 465) and submission (port 587) using [Dovecot](https://www.dovecot.org/)
@@ -259,7 +259,7 @@ To configure the Postfix SMTP client connecting using the legacy SMTPS protocol 
 
 ## Incoming SMTPS and submission client authentication
 
-Postfix achieves client authentication using SASL provided by [Dovecot](https://dovecot.org/). Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the `SMTP_RELAY_HOSTAUTH`. Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587.
+Postfix achieves client authentication using SASL provided by [Dovecot](https://dovecot.org/). Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the [`SMTP_RELAY_HOSTAUTH`](#smtp_relay_hostauth). Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587.
 
 To avoid the risk of being an open relay the SMTPS and submission ([MSA](https://en.wikipedia.org/wiki/Message_submission_agent)) services are only activated when at least one SASL method has activated. Three methods are supported; LDAP, IMAP and password file. Any combination of methods can simultaneously be active. If more than one method is active, authentication is attempted in the following order; password file, LDAP and finally IMAP.
 
@@ -359,7 +359,7 @@ Moreover, do not set `SMTPD_TLS_CERT_FILE` and/or `SMTPD_TLS_KEY_FILE` when usin
 
 ## Incoming anti-spam and anti-virus
 
-[amavisd-new](https://www.amavis.org/) is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or [SpamAssassin](https://spamassassin.apache.org/). Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS block-lists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
+[amavis](https://www.amavis.org/) is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or [SpamAssassin](https://spamassassin.apache.org/). Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS block-lists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
 
 [Vipul's Razor](http://razor.sourceforge.net/) is a distributed, collaborative, spam detection and filtering network. It uses a fuzzy [checksum](http://en.wikipedia.org/wiki/Checksum) technique to identify
 message bodies based on signatures submitted by users, or inferred by
@@ -433,7 +433,7 @@ Sender Policy Framework (SPF) is an [email authentication](https://en.wikipedia.
 
 Domain-Keys Identified Mail (DKIM) is an [email authentication](https://en.wikipedia.org/wiki/Email_authentication) method designed to detect forged sender addresses in emails. DKIM allows the receiver to check that an email claimed to have come from a specific [domain](https://en.wikipedia.org/wiki/Domain_name) was indeed authorized by the owner of that domain. It achieves this by affixing a [digital signature](https://en.wikipedia.org/wiki/Digital_signature), linked to a domain name, `MAIL_DOMAIN`, to each outgoing email message, which the receiver can verify by using the DKIM key published in the [DNS](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions) records for that domain.
 
-amavisd-new is configured to check the digital signature of incoming email as well as add digital signatures to outgoing email.
+amavis is configured to check the digital signature of incoming email as well as add digital signatures to outgoing email.
 
 #### `DKIM_KEYBITS`
 
@@ -544,7 +544,7 @@ The level of output for logging is in the range from 0 to 7. The default is: `SY
 | ----- | ----- | ---- | ---- | ------- | ------ | ---- | ----- |
 | 0     | 1     | 2    | 3    | 4       | **5**  | 6    | 7     |
 
-Separately, `LOG_LEVEL` and `SA_DEBUG` control the logging level of amavisd-new and spamassasin respectively.
+Separately, `LOG_LEVEL` and `SA_DEBUG` control the logging level of amavis and spamassasin respectively.
 `LOG_LEVEL` takes valued from 0 to 5 and `SA_DEBUG` is either 1 (activated) or 0 (deactivated). Note that these messages will only appear in the log if `SYSLOG_LEVEL` is 7 (debug).
 
 # Knowledge base
