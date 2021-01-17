@@ -522,15 +522,29 @@ The recipient email address can be rewritten using [regular expressions](https:/
 
 For example, assume you want email addresses like `user+info@domain.com` and `user-news@domain.com` to be forwarded to `user@domain.com`. This can be achieved by setting `REGEX_ALIAS='/([^+]+)[+-].*@(.+)/ $1@$2'`. The user can now, with the mail client, arrange filters to sort email into sub folders.
 
-## Delivery transport
+## Delivery transport and mail boxes
 
-The `mlan/postfix-amavis` image is designed primarily to work with a companion software which holds the mail boxes. That is, Postfix is not intended to be used for final delivery.
+The `mlan/postfix-amavis` image is designed primarily to work with companion software, like [Kolab](https://hub.docker.com/r/kvaps/kolab), [Kopano](https://cloud.docker.com/u/mlan/repository/docker/mlan/kopano) or [Zimbra](https://hub.docker.com/r/jorgedlcruz/zimbra/) which will hold the mail boxes. That is, often received messages are transported for final delivery. [Local Mail Transfer Protocol (LMTP)](https://en.wikipedia.org/wiki/Local_Mail_Transfer_Protocol) is one such transport mechanism. Nonetheless, if no transport mechanism is specified messages will be delivered to local mail boxes.
 
 #### `VIRTUAL_TRANSPORT`
 
-Postfix delivers the messages to the companion software, like [Kolab](https://hub.docker.com/r/kvaps/kolab), [Kopano](https://cloud.docker.com/u/mlan/repository/docker/mlan/kopano) or [Zimbra](https://hub.docker.com/r/jorgedlcruz/zimbra/), using a transport mechanism you specify using the environment variable `VIRTUAL_TRANSPORT`. [LMTP](https://en.wikipedia.org/wiki/Local_Mail_Transfer_Protocol) is one such transport mechanism. One example of final delivery transport to Kopano is: `VIRTUAL_TRANSPORT=lmtp:app:2003`
+The environment variable `VIRTUAL_TRANSPORT` specifies how messages will be transported for final delivery. Frequently the server taking final delivery listen to LMTP. Assuming it does so on port 2003 it is sufficient to set `VIRTUAL_TRANSPORT=lmtp:app:2003` to arrange the transport.
 
-Local mail boxes will be created if there is no `VIRTUAL_TRANSPORT` defined. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/info@example.com`.
+If `VIRTUAL_TRANSPORT` is not defined local mail boxes will be managed by Postfix directly. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/user@example.com`.
+
+The `mlan/postfix-amavis` image include the [Dovecot, a secure IMAP server](https://dovecot.org/), which can also manage mail boxes. Setting `VIRTUAL_TRANSPORT=lmtp:unix:private/transport` will transport messages to dovecot which will arrange local mail boxes. Since Dovecot serves both IMAP and POP3 these mailboxes can be accessed by remote mail clients if desired.
+
+The table below is provided to give an overview of the options discussed here.
+
+| `VIRTUAL_TRANSPORT`            | Final delivery                                               |
+| ------------------------------ | ------------------------------------------------------------ |
+| `=`                            | Postfix local mail box `/var/mail/user@example.com`          |
+| `=lmtp:app:2003`               | External LMTP host `app` take delivery                       |
+| `=lmtp:unix:private/transport` | Dovecot local mail box `/var/mail/user/inbox`, with IMAP and POP3 access |
+
+## Mail delivery, IMAP, IMAPS, POP3 and POP3S
+
+When [Dovecot](https://dovecot.org/) manages the mail boxes, see [`VIRTUAL_TRANSPORT`](#virtual-transport), mail clients can retrieve messages using both the [IMAP](https://www.atmail.com/blog/imap-commands/) and POP3 protocols. Dovecot will use TLS certificates that have been made available to Postfix, in which case IMAPS and POP3S connections will be possible, see [Incoming TLS support](#incoming-tls-support).
 
 ## Message size limit `MESSAGE_SIZE_LIMIT`
 

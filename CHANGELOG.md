@@ -1,6 +1,7 @@
 # 1.5.0
 
 - [docker](Dockerfile) Now use alpine:3.13 (postfix:3.5.8) _BREAKING!_ Incompatible hash|btree, use FORCE_CONFIG to migrate to lmdb.
+- [dovecot](src/dovecot) Configured local mailbox delivery.
 - [test](test) Update to use `mlan/openldap:2`.
 - [demo](demo) Update to use `mlan/openldap:2`.
 

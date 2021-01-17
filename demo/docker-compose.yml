@@ -51,7 +51,9 @@ services:
     environment: # Virgin config, ignored on restarts unless FORCE_CONFIG given.
       - MESSAGE_SIZE_LIMIT=${MESSAGE_SIZE_LIMIT-25600000}
       - LDAP_HOST=auth
-      - VIRTUAL_TRANSPORT=lmtp:app:2003
+#      - VIRTUAL_TRANSPORT=lmtp:app:2003
+      - VIRTUAL_TRANSPORT=lmtp:unix:private/transport
+      - SMTPD_USE_TLS=yes
       - SMTP_RELAY_HOSTAUTH=${SMTP_RELAY_HOSTAUTH-}
       - SMTP_TLS_SECURITY_LEVEL=${SMTP_TLS_SECURITY_LEVEL-}
       - SMTP_TLS_WRAPPERMODE=${SMTP_TLS_WRAPPERMODE-no}

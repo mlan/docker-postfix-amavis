@@ -25,7 +25,7 @@ amavis_apply_envvars() {
 			lcase_var="$(echo $env_var | tr '[:upper:]' '[:lower:]')"
 			if [ -z "${DOCKER_AMAVIS_ENVVAR##*$env_var*}" ]; then
 				env_val="$(eval echo \$$env_var)"
-				dc_log 5 "Setting amavis parameter $lcase_var = $env_val"
+				dc_log 5 "[amavis] Setting parameter: $lcase_var = $env_val"
 				dc_modify $AMAVIS_CF '\$'$lcase_var = "$env_val;"
 			fi
 		done
@@ -40,7 +40,7 @@ amavis_setup_domains() {
 	local domain_main=$(echo $domains | sed 's/\s.*//')
 	local domain_extra=$(echo $domains | sed 's/[^ ]* *//' | sed 's/[^ ][^ ]*/"&"/g' | sed 's/ /, /g')
 	if (dc_is_installed amavis && [ -n "$domain_main" ]); then
-		dc_log 5 "Configuring amavis for domains $domains"
+		dc_log 5 "[amavis] Configuring for domains $domains"
 		dc_modify $AMAVIS_CF '\$mydomain' = "'"$domain_main"';"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
 			dc_modify $AMAVIS_CF '@local_domains_maps' = '( [".$mydomain", '$domain_extra'] );'
@@ -61,15 +61,15 @@ amavis_setup_dkim() {
 	local txtfile=$DOCKER_DKIM_LIB/$domain_main.$selector._domainkey.txt
 	local keystring="$DKIM_PRIVATEKEY"
 	if (dc_is_installed amavis && [ -n "$selector" ] && [ -n "$domain_main" ]); then
-		dc_log 5 "Setting dkim selector and domain to $selector and $domain_main"
+		dc_log 5 "[amavis] Setting dkim selector and domain to $selector and $domain_main"
 		# insert config statements just before last line
 		dc_cond_append -i $AMAVIS_CF '@dkim_signature_options_bysender_maps = ( { "." => { ttl => 21*24*3600, c => "relaxed/simple" } } );'
 		dc_cond_append -i $AMAVIS_CF 'dkim_key("'$domain_main'", "'$selector'", "'$keyfile'");'
 		if [ -n "$keystring" ]; then
 			if [ -e $keyfile ]; then
-				dc_log 4 "Overwriting private dkim key here $keyfile"
+				dc_log 4 "[amavis] Overwriting private dkim key here: $keyfile"
 			else
-				dc_log 5 "Writing private dkim key here $keyfile"
+				dc_log 5 "[amavis] Writing private dkim key here: $keyfile"
 			fi
 			if echo "$keystring" | grep "PRIVATE KEY" - > /dev/null; then
 				echo "$keystring" fold -w 64 > $keyfile
@@ -95,7 +95,7 @@ amavis_setup_dkim() {
 #
 amavis_update_spamassassin() {
 	if dc_is_installed spamassassin; then
-		dc_log 5 "Updating spamassassin rules"
+		dc_log 5 "[amavis] Updating spamassassin rules."
 		( sa-update ) &
 	fi
 }
@@ -111,7 +111,7 @@ amavis_register_razor() {
 	local pass=$2
 	local razor_home=$DOCKER_MILT_LIB/.razor
 	if dc_is_installed razor; then
-		dc_log 5 "Discovering razor servers"
+		dc_log 5 "[amavis] Discovering razor servers."
 		razor-admin -home=$razor_home -create
 		razor_discovery_server=$(head -n1 $razor_home/servers.discovery.lst)
 		if ([ -n "$auth" ] && [ ! -e $DOCKER_MILTDB_LIB/identity ]); then
@@ -122,7 +122,7 @@ amavis_register_razor() {
 				local message="$(razor-admin -home=$razor_home $user $pass -register)"
 				dc_log 5 "$message"
 			else
-				dc_log 4 "Not registering razor, cannot ping $razor_discovery_server"
+				dc_log 4 "[amavis] Not registering razor, cannot ping $razor_discovery_server."
 			fi
 		fi
 		dc_chowncond $DOCKER_MILT_RUNAS $razor_home
@@ -138,7 +138,7 @@ amavis_monitor_spamd() {
 		for watchdir in $KOPANO_SPAMD_LIB/*; do
 			if [ -d $watchdir ]; then
 				service="spamd-$(basename $watchdir)"
-				dc_log 5 "Setting up $service service"
+				dc_log 5 "[amavis] Setting up $service service."
 				docker-service.sh "-n $service $(which inotifyd) $(which amavis-learn.sh) $watchdir:n"
 			fi
 		done

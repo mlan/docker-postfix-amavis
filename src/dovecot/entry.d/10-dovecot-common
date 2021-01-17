@@ -29,7 +29,7 @@ dovecot_setup_postfix() {
 #
 dovecot_setup_smtpd_sasl() {
 #	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
-	dc_log 5 "Enabling postfix-dovecot client SASL via submission"
+	dc_log 5 "[postfix] Enabling secure smtps and subm with client SASL auth-dovecot."
 	# enable sasl auth on the submission port
 	postconf -M "submission/inet=submission inet n - n - - smtpd"
 	postconf -P "submission/inet/syslog_name=postfix/submission"
@@ -66,15 +66,11 @@ dovecot_setup_passdb_file() {
 	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	if [ -n "$clientauth" ]; then
 		setup_passdb=file
-		dc_log 5 "Setup Dovecot passdb file"
+		dc_log 5 "[dovecot] Setup authentication with passdb-file."
 		cat <<-!cat > $DOVECOT_CD/22-passdb-file.conf
 			passdb {
 			driver = passwd-file
 			args = $DOCKER_IMAP_PASSDB_FILE
-			}
-			userdb {
-			driver = static
-			args = uid=500 gid=500 home=/home/%u
 			}
 		!cat
 		# create client passwd file used for authentication
@@ -91,7 +87,7 @@ dovecot_setup_passdb_imap() {
 	local imaphost=${1-$SMTPD_SASL_IMAPHOST}
 	if [ -n "$imaphost" ]; then
 		setup_passdb=imap
-		dc_log 5 "Setup dovecot passdb remote-imap-host $imaphost"
+		dc_log 5 "[dovecot] Setup authentication with remote-imap-host: $imaphost."
 		cat <<-!cat > $DOVECOT_CD/21-passdb-imap.conf
 			passdb {
 			driver = imap
@@ -117,13 +113,9 @@ dovecot_setup_passdb_ldap() {
 	local passdb_ldap_arg=$DOVECOT_CD/passdb-ldap.conf.ext
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$pass_filter" ] && [ -n "$LDAP_QUERY_ATTRS_PASS" ]); then
 		setup_passdb=ldap
-		dc_log 5 "Setup dovecot passdb ldap-host $LDAP_HOST"
+		dc_log 5 "[dovecot] Setup authentication with ldap-host: $LDAP_HOST."
 		cat <<-!cat > $passdb_ldap_cf
 			passdb {
-			driver = ldap
-			args = $passdb_ldap_arg
-			}
-			userdb {
 			driver = ldap
 			args = $passdb_ldap_arg
 			}
@@ -140,6 +132,25 @@ dovecot_setup_passdb_ldap() {
 		!cat
 	fi
 }
+
+#
+#
+# Activate TLS if we have relevant envvars defined.
+#
+dovecot_activate_tls_cert() {
+	local ssl_cf=$DOVECOT_CD/10-ssl.conf
+	local ssl_crt=$(postconf -h smtpd_tls_cert_file)
+	local ssl_key=$(postconf -h smtpd_tls_key_file)
+	if ([ -n "$ssl_crt" ] && [ -n "$ssl_key" ]); then
+		dc_log 5 "[dovecot] Setup ssl/tls certificate: $ssl_crt."
+		cat <<-!cat > $ssl_cf
+			ssl = yes
+			ssl_cert = <$ssl_crt
+			ssl_key = <$ssl_key
+		!cat
+	fi
+}
+
 
 #
 # Generate encrypted password.

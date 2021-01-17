@@ -30,7 +30,7 @@ postfix_apply_envvars() {
 		lcase_var="$(echo $env_var | tr '[:upper:]' '[:lower:]')"
 		if [ "$(postconf -H $lcase_var 2>/dev/null)" = "$lcase_var" ]; then
 			env_val="$(eval echo \$$env_var)"
-			dc_log 5 "Setting postfix parameter $lcase_var = $env_val"
+			dc_log 5 "[postfix] Setting parameter: $lcase_var = $env_val"
 			postconf $lcase_var="$env_val"
 		fi
 	done
@@ -43,7 +43,7 @@ postfix_default_domains() {
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	if [ -z "$domains" ]; then
 		export MAIL_DOMAIN=$DOCKER_DEFAULT_DOMAIN
-		dc_log 4 "No MAIL_DOMAIN, non FQDN HOSTNAME, so using $MAIL_DOMAIN"
+		dc_log 4 "[postfix] No MAIL_DOMAIN, non FQDN HOSTNAME, so using: $MAIL_DOMAIN"
 	fi
 }
 
@@ -53,7 +53,7 @@ postfix_default_domains() {
 postfix_setup_domains() {
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
 	if [ -n "$domains" ] && ([ -n "$MAIL_BOXES" ] || ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ])); then
-		dc_log 5 "Configuring postfix for domains $domains"
+		dc_log 5 "[postfix] Configuring for domains $domains"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
 			for domain in $domains; do
 				dc_cond_append $POSTFIX_VIRT_DOMAIN "$domain #domain"
@@ -83,7 +83,7 @@ postfix_default_aliasmap() {
 postfix_setup_aliasmap() {
 	local aliasmaps="${1-$MAIL_ALIASES}"
 	if [ -n "$aliasmaps" ]; then
-		dc_log 5 "Config. postfix aliases"
+		dc_log 5 "[postfix] Configuring mail aliases."
 		for aliasmap in $aliasmaps; do
 			dc_cond_append $POSTFIX_ALIASES $(echo "$aliasmap" | sed 's/[:,]/& /g')
 		done
@@ -92,7 +92,7 @@ postfix_setup_aliasmap() {
 		postalias $POSTFIX_ALIASES
 		newaliases
 	else
-		dc_log 7 "No postfix aliases defined"
+		dc_log 7 "[postfix] No mail aliases defined."
 		postconf alias_maps=
 		postconf alias_database=
 	fi
@@ -103,7 +103,7 @@ postfix_setup_aliasmap() {
 #
 postfix_setup_regex_aliasmap() {
 	if [ -n "$REGEX_ALIAS" ]; then
-		dc_log 5 "Configuring recipient address rewrite using regexp: $REGEX_ALIAS"
+		dc_log 5 "[postfix] Configuring recipient address rewrite using regexp: $REGEX_ALIAS"
 		echo "$REGEX_ALIAS" > $POSTFIX_REGEXP_ALIASES
 		postmap $POSTFIX_REGEXP_ALIASES
 		postconf "virtual_regexp_alias_maps=regexp:$POSTFIX_REGEXP_ALIASES"
@@ -118,7 +118,7 @@ postfix_setup_smtp_auth() {
 	local host=${hostauth% *}
 	local auth=${hostauth#* }
 	if [ -n "$host" ]; then
-		dc_log 5 "Configuring postfix SMTP relay: $host"
+		dc_log 5 "[postfix] Configuring SMTP relay: $host"
 		postconf -e relayhost=$host
 		if [ -n "$auth" ]; then
 			postconf -e smtp_sasl_auth_enable=yes
@@ -128,7 +128,7 @@ postfix_setup_smtp_auth() {
 			postmap lmdb:$POSTFIX_SASL_PASSWD
 		fi
 	else
-		dc_log 7 "No SMTP relay defined"
+		dc_log 7 "[postfix] No SMTP relay defined."
 	fi
 }
 
@@ -137,7 +137,7 @@ postfix_setup_smtp_auth() {
 #
 postfix_setup_mailbox_ldap() {
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ]); then
-		dc_log 5 "Configuring postfix-ldap with ldap-host $LDAP_HOST"
+		dc_log 5 "[postfix] Configuring ldap lookup with ldap-host: $LDAP_HOST"
 		postconf virtual_mailbox_maps=ldap:$POSTFIX_LDAP_USERS_CF
 		_postfix_generate_ldapmap "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_USER" > $POSTFIX_LDAP_USERS_CF
 		if [ -n "$LDAP_QUERY_FILTER_ALIAS" ]; then
@@ -190,7 +190,7 @@ _postfix_generate_ldapmap() {
 postfix_setup_mailbox_lmdb() {
 	local emails="${1-$MAIL_BOXES}"
 	if [ -n "$emails" ]; then
-		dc_log 5 "Configuring postfix-virt-mailboxes"
+		dc_log 5 "[postfix] Configuring virtual mailboxes."
 		for email in $emails; do
 			dc_cond_append $POSTFIX_VIRT_MAILBOX $email $email
 		done
@@ -229,18 +229,18 @@ postfix_generate_tls_cert() {
 	if ([ -z "$SMTPD_TLS_CERT_FILE" ] && [ -z "$SMTPD_TLS_ECCERT_FILE" ] && \
 		[ -z "$SMTPD_TLS_DCERT_FILE" ] && [ -z "$SMTPD_TLS_CHAIN_FILES" ] && \
 		[ "$SMTPD_USE_TLS" = "yes" ] && dc_is_installed openssl); then
-		dc_log 4 "SMTPD_USE_TLS=yes but no certs given, so generating self-signed cert for host $HOSTNAME"
+		dc_log 4 "[postfix] SMTPD_USE_TLS=yes but no certs given, so generating self-signed cert for host: $HOSTNAME"
 		dc_tls_setup_selfsigned_cert $DOCKER_APPL_SSL_CERT $DOCKER_APPL_SSL_KEY
 	fi
 }
 
 #
-# Activate TLS if we have relevent envvars defined.
+# Activate TLS if we have relevant envvars defined.
 #
 postfix_activate_tls_cert() {
 	if ([ -n "$SMTPD_TLS_CERT_FILE" ] || [ -n "$SMTPD_TLS_ECCERT_FILE" ] || \
 		[ -n "$SMTPD_TLS_DCERT_FILE" ] || [ -n "$SMTPD_TLS_CHAIN_FILES" ]); then
-		dc_log 5 "Activating incoming tls"
+		dc_log 5 "[postfix] Activating incoming tls."
 		postconf -e smtpd_use_tls=yes
 		postconf -e smtpd_tls_security_level=may
 		postconf -e smtpd_tls_auth_only=yes
@@ -256,11 +256,11 @@ postfix_activate_tls_cert() {
 postfix_update_dhparam() {
 	local bits=${1-2048}
 	if dc_is_installed openssl; then
-		dc_log 5 "Regenerating postfix edh $bits bit parameters"
+		dc_log 5 "[postfix] Regenerating edh $bits bit parameters."
 		mkdir -p $DOCKER_APPL_SSL_DIR
 		openssl dhparam -out $DOCKER_APPL_SSL_DIR/dh$bits.pem $bits
 		postconf smtpd_tls_dh1024_param_file=$DOCKER_APPL_SSL_DIR/dh$bits.pem
 	else
-		dc_log 4 "Cannot regenerate edh since openssl is not installed"
+		dc_log 4 "[postfix] Cannot regenerate edh since openssl is not installed."
 	fi
 }

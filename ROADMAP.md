@@ -21,16 +21,6 @@ checks for pid=1 and since it isn't start `master -s` instead of `exec master -i
 
 Perhaps, implement something more interactive using dialog?
 
-## Dovecot MailBox, IMAP and POP3
-
-Accommodate IMAP and POP3 configuration via environment variables in build target `base`
-
-`VIRTUAL_TRANSPORT` controlls where email goes.
-
-1. `VIRTUAL_TRANSPORT=`: postfix local mbox
-2. `VIRTUAL_TRANSPORT=lmtp:app:2003`: external LMTP host
-3. `VIRTUAL_TRANSPORT=lmtp:unix:private/lmtp`: dovecot
-
 ## Additional Alpine packages
 
 Some potentially interesting Linux Alpine packages are now in testing.
