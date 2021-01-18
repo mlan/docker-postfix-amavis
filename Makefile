@@ -1,99 +1,38 @@
+# Makefile
+#
+# build
+#
+
 -include    *.mk
 
 BLD_ARG  ?= --build-arg DIST=alpine --build-arg REL=3.13
 BLD_REPO ?= mlan/postfix-amavis
 BLD_VER  ?= latest
+BLD_TGT  ?= full
 
-IMG_REPO ?= $(BLD_REPO)
-IMG_VER  ?= $(BLD_VER)
-_ver      = $(if $(findstring latest,$(1)),$(2),$(1)-$(2))
-_ip       = $(shell docker inspect -f \
-	'{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
-	$(1) | head -n1)
-IMG_CMD  ?= /bin/sh
+SRC_CMD  ?= src/kopano/bin/kopano-webaddr.sh -VV
+SRC_VER  ?= $(shell $(SRC_CMD))
 
-TST_PORT ?= 25
-TST_DOM  ?= example.lan
-TST_DOM2 ?= personal.lan
-TST_DOM3 ?= global.lan
-TST_SADR ?= sender
-TST_RADR ?= receiver
-TST_BOX  ?= $(TST_RADR)@$(TST_DOM) $(TST_SADR)@$(TST_DOM)
-TST_BOX2 ?= $(TST_RADR)@$(TST_DOM) $(TST_RADR)@$(TST_DOM2)
-TST_ALS  ?= root:$(TST_RADR),$(TST_RADR)@$(TST_DOM) postmaster:$(TST_RADR)
-TST_HOST ?= mx.$(TST_DOM)
-TST_NET  ?= test-net
-TST_CLT  ?= test-client
-TST_SRV  ?= test-server
-TST_AUTH ?= test-auth
-TST_VCLT ?= $(TST_CLT)-var:/var
-TST_VSRV ?= $(TST_SRV)-var:/var
-TST_SLOG ?= 4
-TST_ALOG ?= 5
-TST_SBUG ?= 0
-TST_STAG ?= -99
-TST_ENV  ?= -e MYORIGIN=$(TST_DOM) -e SYSLOG_LEVEL=$(TST_SLOG) \
-		-e SA_TAG_LEVEL_DEFLT=$(TST_STAG) -e SA_DEBUG=$(TST_SBUG) -e LOG_LEVEL=$(TST_ALOG)
-TST_MSG  ?= ---test-message---
-TST_KEY  ?= test/tmp/local_priv_key.pem
-TST_CRT  ?= test/tmp/local_ca_cert.pem
-TST_TLS  ?= -e SMTPD_TLS_KEY_FILE=$(TST_PKEY) -e SMTPD_TLS_CERT_FILE=$(TST_PCRT)
-TST_ACME ?= test/tmp/acme/acme.json
-TST_ATLS ?= -e ACME_FILE=/acme/acme.json -v $(shell pwd)/$(shell dirname $(TST_ACME)):/acme
-TST_CRTD ?= 30
-TST_PKEY ?= /etc/ssl/postfix/priv.pem
-TST_PCRT ?= /etc/ssl/postfix/cert.pem
-TST_USR1 ?= client1
-TST_PWD1 ?= password1
-TST_USR2 ?= client2
-TST_PWD2 ?= password2
-TST_DK_S ?= default
-TST_ADBA ?= -e LDAP_HOST=$(TST_AUTH) -e LDAP_USER_BASE=ou=$(LDAP_UOU),$(LDAP_BAS)
-TST_ADLU ?= $(TST_ADBA) -e LDAP_QUERY_FILTER_USER=$(LDAP_FOU)
-TST_ADAU ?= $(TST_ADBA) -e LDAP_QUERY_ATTRS_PASS=$(LDAP_APW) -e LDAP_QUERY_FILTER_PASS=$(LDAP_FPW)
-TST_ADAL ?= $(TST_ADLU) -e LDAP_QUERY_ATTRS_PASS=$(LDAP_APW)
-LDAP_BAS ?= dc=example,dc=com
-LDAP_UOU ?= users
-LDAP_UOB ?= posixAccount
-LDAP_GOU ?= groups
-LDAP_FOU ?= "(&(objectclass=$(LDAP_UOB))(mail=%s))"
-LDAP_FPW ?= "(&(objectclass=$(LDAP_UOB))(uid=%u))"
-LDAP_APW ?= uid=user
-CURL_DBG ?=
+TST_REPO ?= $(BLD_REPO)
+TST_VER  ?= $(BLD_VER)
+TST_ENV  ?= -C test
+TST_TGTE ?= $(addprefix test-,all diff down env htop imap logs mail mail-send pop3 sh sv up)
+TST_INDX ?= 1 2 3 4 5 6 7 8
+TST_TGTI ?= $(addprefix test_,$(TST_INDX)) $(addprefix test-up_,0 $(TST_INDX))
 
-CNT_NAME ?= postfix-amavis-mta
-CNT_PORT ?= -p 127.0.0.1:$(TST_PORT):25
-CNT_ENV  ?= --hostname $(TST_HOST) -e MAIL_BOXES="$(TST_BOX)"
-CNT_VOL  ?= -
-CNT_DRV  ?=
-CNT_IP    = $(shell docker inspect -f \
-	'{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
-	$(1) | head -n1)
+export TST_REPO TST_VER
 
-TST_W8S1 ?= 1
-TST_W8S2 ?= 80
-TST_W8L1 ?= 20
-TST_W8L2 ?= 120
+_version  = $(if $(findstring $(BLD_TGT),$(1)),\
+$(if $(findstring latest,$(2)),latest $(1),$(2) $(1)-$(2)),\
+$(if $(findstring latest,$(2)),$(1),$(1)-$(2)))
 
-.PHONY: build build-all build-mini build-base build-full ps \
-    prune test-debugtools-srv test-learn-bayes test-learn-spam test-regen-edh-srv \
-    test-all test-mail test-cert-rm test-down test-logs-clt test-logs-srv \
-    test-cmd-clt test-cmd-srv test-diff-clt test-diff-srv
+build-all: build_mini build_base build_full
 
-build: Dockerfile
-	docker build $(BLD_ARG) --target full -t $(BLD_REPO):$(BLD_VER) .
+build: build_$(BLD_TGT)
 
-build-all: build-mini build-base build-full
-
-build-mini: Dockerfile
-	docker build $(BLD_ARG) --target mini -t $(BLD_REPO):$(call _ver,$(BLD_VER),mini) .
-
-build-base: Dockerfile
-	docker build $(BLD_ARG) --target base -t $(BLD_REPO):$(call _ver,$(BLD_VER),base) .
-
-build-full: Dockerfile
-	docker build $(BLD_ARG) --target full -t $(BLD_REPO):$(call _ver,$(BLD_VER),full) \
-		-t $(BLD_REPO):$(BLD_VER) .
+build_%: Dockerfile
+	docker build $(BLD_ARG) --target $* \
+	$(addprefix --tag $(BLD_REPO):,$(call _version,$*,$(BLD_VER))) .
 
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
@@ -104,335 +43,11 @@ ps:
 prune:
 	docker image prune -f
 
-test-all: test-up_0 test_1 test_2 test_3 test_4 test_5 test_6 test_7 test_8
-	
+clean:
+	docker images | grep $(BLD_REPO) | awk '{print $$1 ":" $$2}' | uniq | xargs docker rmi
 
-test_%: test-up_% test-waitl_% test-logs_% test-mail_% test-down_%
-	
+$(TST_TGTE):
+	${MAKE} $(TST_ENV) $@
 
-test-up_0:
-	#
-	#
-	# test (0) run without envvars (is there smoke?)
-	#
-	# run containers see if there are logs and stop.
-	#
-	#
-	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),mini)
-	sleep $(TST_W8L1)
-	docker container logs $(TST_SRV) | grep 'docker-entrypoint.sh'
-	docker stop $(TST_SRV)
-	sleep $(TST_W8S1)
-	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),base)
-	sleep $(TST_W8L1)
-	docker container logs $(TST_SRV) | grep 'docker-entrypoint.sh'
-	docker stop $(TST_SRV)
-	sleep $(TST_W8S1)
-	docker run --rm -d --name $(TST_SRV) $(IMG_REPO):$(call _ver,$(IMG_VER),full)
-	sleep $(TST_W8L1)
-	docker container logs $(TST_SRV) | grep 'docker-entrypoint.sh'
-	docker stop $(TST_SRV)
-	sleep $(TST_W8S1)
-	#
-	#
-	# test (0) successful
-	#
-	#
-
-test-up_1: test-up-net
-	#
-	#
-	# test (1) basic mta function and virtual lookup
-	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox
-	# recv: cat srv postfix mbox
-	#
-	#
-	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e MAIL_BOXES="$(TST_BOX)" \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
-	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) -e MAIL_ALIASES="$(TST_ALS)" \
-		-e RELAYHOST=[$(TST_SRV)] -e MYDESTINATION= \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
-
-test-up_2: test-up-net test-up-auth_2
-	#
-	#
-	# test (2) basic mta function and ldap lookup
-	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox
-	# recv: cat srv postfix mbox
-	#
-	#
-	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) $(TST_ADLU) \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
-	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e RELAYHOST=[$(TST_SRV)] -e MYDESTINATION= \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
-
-test-up_3: test-up-net test-up-auth_3 test-cert-gen
-	#
-	#
-	# test (3) ldap sasl, basic and selfsigned tls over smtps, subm w ldap lookup
-	#
-	# send: curl smtps://clt -> clt smtps://srv:587 -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
-	#
-	#
-	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) $(TST_ADAL) $(TST_TLS) \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),base)
-	docker cp $(TST_KEY) $(TST_SRV):$(TST_PKEY)
-	docker cp $(TST_CRT) $(TST_SRV):$(TST_PCRT)
-	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) $(TST_ADAU) \
-		-e SMTP_RELAY_HOSTAUTH="[$(TST_SRV)]:587 $(TST_RADR):$(TST_PWD1)" -e MYDESTINATION= \
-		-e SMTP_TLS_SECURITY_LEVEL=encrypt -e SMTPD_USE_TLS=yes \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),base)
-
-test-up_4: test-up-net test-cert-gen
-	#
-	#
-	# test (4) passwd-file sasl and acme tls over subm
-	#
-	# send: curl smtp://clt -> clt smtps://srv:587 -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
-	#
-	#
-	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e MAIL_BOXES="$(TST_BOX)" $(TST_ATLS) \
-		-e SMTPD_SASL_CLIENTAUTH="$(TST_USR1):{plain}$(TST_PWD1) $(TST_USR2):{plain}$(TST_PWD2)" \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),base)
-	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e SMTP_RELAY_HOSTAUTH="[$(TST_SRV)]:587 $(TST_USR2):$(TST_PWD2)" \
-		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),mini)
-
-test-up_5: test-up-net
-	#
-	#
-	# test (5) basic milter function and selfsigned tls
-	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
-	#
-	#
-	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e MAIL_BOXES="$(TST_BOX)" -e SMTPD_USE_TLS=yes \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
-	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e RELAYHOST=[$(TST_SRV)] \
-		-e MYDESTINATION= -e LOG_LEVEL=$(TST_ALOG) \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
-
-test-up_6: test-up-net
-	#
-	#
-	# test (6) dkim and multiple domains
-	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
-	#
-	#
-	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e MAIL_BOXES="$(TST_BOX2)" -e MAIL_DOMAIN="$(TST_DOM) $(TST_DOM2)" \
-		-v $(TST_SRV)-srv:/srv \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
-	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) -e DKIM_SELECTOR=$(TST_DK_S) \
-		-e RELAYHOST=[$(TST_SRV)] \
-		-e MYDESTINATION= -e MAIL_DOMAIN="$(TST_DOM)" \
-		-v $(TST_CLT)-srv:/srv \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
-
-test-up_7: test-up-net test_6
-	#
-	#
-	# test (7) persistent /srv no env given
-	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
-	#
-	#
-	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) \
-		-v $(TST_SRV)-srv:/srv \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
-	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) \
-		-v $(TST_CLT)-srv:/srv \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
-
-test-up_8: test-up-net test_7
-	#
-	#
-	# test (8) persistent /srv FORCE_CONFIG
-	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
-	#
-	#
-	docker run --rm -d --name $(TST_SRV) --hostname srv.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) -e FORCE_CONFIG=true \
-		-e MAIL_BOXES="$(TST_BOX2)" -e MAIL_DOMAIN="$(TST_DOM) $(TST_DOM2)" \
-		-v $(TST_SRV)-srv:/srv \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
-	docker run --rm -d --name $(TST_CLT) --hostname clt.$(TST_DOM) \
-		--network $(TST_NET) $(TST_ENV) \
-		-e RELAYHOST=[$(TST_SRV)] \
-		-e MYDESTINATION= -e MAIL_DOMAIN="$(TST_DOM)" \
-		-v $(TST_CLT)-srv:/srv \
-		$(IMG_REPO):$(call _ver,$(IMG_VER),full)
-
-test-mail: test-mail_0
-
-test-mail_%: test-mail-send_% test-waits_% test-mail-read_%
-	#
-	#
-	# test ($*) successful
-	#
-	#
-
-test-logs_%:
-	docker container logs $(TST_SRV) | grep 'docker-entrypoint.sh' || true
-
-test-waits_%:
-	case $* in [1-4]) sleep $(TST_W8S1);; *) sleep $(TST_W8S2);; esac
-
-test-waitl_%:
-	case $* in [1-4]) sleep $(TST_W8L1);; *) sleep $(TST_W8L2);; esac
-
-test-up-net:
-	docker network create $(TST_NET) 2>/dev/null || true
-
-test-down-net:
-	docker network rm $(TST_NET) || true
-
-test-down: test-down_0
-	docker network rm $(TST_NET) 2>/dev/null || true
-	docker volume rm $(TST_SRV)-srv $(TST_CLT)-srv 2>/dev/null || true
-
-test-down_%:
-	docker rm -f $(TST_CLT) $(TST_SRV) $(TST_AUTH) 2>/dev/null || true
-	if [ $* -ge 0 ]; then sleep $(TST_W8S1); fi
-
-test-up-auth_%:
-	docker run --rm -d --name $(TST_AUTH) --network $(TST_NET) mlan/openldap:1
-	sleep $(TST_W8L1)
-	printf "dn: ou=$(LDAP_UOU),$(LDAP_BAS)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_UOU)\n\ndn: ou=$(LDAP_GOU),$(LDAP_BAS)\nchangetype: add\nobjectClass: organizationalUnit\nobjectClass: top\nou: $(LDAP_GOU)\n\ndn: uid=$(TST_RADR),ou=$(LDAP_UOU),$(LDAP_BAS)\nchangetype: add\nobjectClass: top\nobjectClass: inetOrgPerson\nobjectClass: $(LDAP_UOB)\ncn: $(TST_RADR)\nsn: $(TST_RADR)\nuid: $(TST_RADR)\nmail: $(TST_RADR)@$(TST_DOM)\nuidNumber: 1234\ngidNumber: 1234\nhomeDirectory: /home/$(TST_RADR)\nuserPassword: $(TST_PWD1)\n" \
-	| docker exec -i $(TST_AUTH) ldap modify
-
-test-auth-srv:
-	docker exec -it $(TST_SRV) doveadm auth lookup $(TST_USR2)
-
-test-conf_%:
-	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
-	$(eval tst_spro := $(shell if [ $* -eq 3 ]; then echo smtps; else echo smtp; fi ))
-
-test-mail-send_%: test-conf_%
-	@printf "From: <$(TST_SADR)@$(TST_DOM)>\nTo: <$(TST_RADR)@$(tst_dom)>\nDate: $$(date)\nSubject:Test\n\n$(TST_MSG)$*\n" \
-	| docker run -i --rm --network $(TST_NET) curlimages/curl -s -T - $(CURL_DBG) \
-	--mail-from $(TST_SADR)@$(TST_DOM) --mail-rcpt $(TST_RADR)@$(tst_dom) \
-	--url $(tst_spro)://$(TST_CLT) -u $(TST_RADR):$(TST_PWD1) --ssl --anyauth -k
-
-test-mail-read_%:
-	$(eval tst_str := $(shell if [ $* -eq 6 ]; then echo DKIM-Signature; else echo ^$(TST_MSG)$*; fi ))
-	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(TST_DOM2); else echo $(TST_DOM); fi ))
-	docker exec -it $(TST_SRV) cat /var/mail/$(TST_RADR)@$(tst_dom) | grep $(tst_str)
-
-$(TST_CRT): $(TST_KEY)
-	openssl req -x509 -utf8 -new -batch -days $(TST_CRTD) \
-		-subj "/CN=$(TST_SRV)" -key $(TST_KEY) -out $(TST_CRT)
-
-$(TST_KEY): test/tmp
-	openssl genrsa -out $(TST_KEY)
-
-$(TST_ACME): $(TST_CRT)
-	mkdir -p $(shell dirname $(TST_ACME))
-	test/bin/gen-acme-json.sh $(TST_RADR)@$(TST_DOM) srv.$(TST_DOM) $(TST_KEY) $(TST_CRT) > $(TST_ACME)
-
-test-cert-rm:
-	rm $(TST_KEY) $(TST_CRT) $(TST_ACME)
-
-test-env-clt:
-	docker exec -it $(TST_CLT) env
-
-test-env-srv:
-	docker exec -it $(TST_SRV) env
-
-test-logs-clt:
-	docker container logs $(TST_CLT)
-
-test-logs-srv:
-	docker container logs $(TST_SRV)
-
-test-cmd-clt:
-	docker exec -it $(TST_CLT) /bin/sh
-
-test-cmd-srv:
-	docker exec -it $(TST_SRV) /bin/sh
-
-test-diff-clt:
-	docker container diff $(TST_CLT)
-
-test-diff-srv:
-	docker container diff $(TST_SRV)
-
-test-sv-clt:
-	docker exec -it $(TST_CLT) sh -c 'sv status $$SVDIR/*'
-
-test-sv-srv:
-	docker exec -it $(TST_SRV) sh -c 'sv status $$SVDIR/*'
-
-test-regen-edh-srv:
-	docker exec -it $(TST_SRV) conf update_postfix_dhparam
-
-test-dkim-key:
-	docker exec -it $(TST_SRV) amavisd testkeys
-
-test-cert-gen: $(TST_ACME)
-
-test-tls-srv_%:
-	$(eval tst_starttls := $(shell if [ $* != 465 ]; then echo --starttls smtp; fi ))
-	docker run --rm -it --network $(TST_NET) drwetter/testssl.sh $(tst_starttls) $(TST_SRV):$* || true
-
-test-smtp-srv: test-tls-srv_25
-	
-test-smtps-srv: test-tls-srv_465
-	
-test-subm-srv: test-tls-srv_587
-	
-test-debugtools-srv:
-	docker exec -it $(TST_SRV) apk --no-cache --update add \
-	nano less lsof htop openldap-clients bind-tools iputils
-
-test-learn-bayes:
-	docker exec -it $(TST_SRV) sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis && rm -rf bayesian.database'
-
-test/tmp:
-	mkdir -p test/tmp
-
-test-export-bayes: test/tmp
-	docker exec -i $(TST_SRV) sa-learn --backup > test/tmp/bayesian.database.bak
-
-test-import-bayes: test/tmp/bayesian.database.bak
-	docker cp test/tmp/bayesian.database.bak $(TST_SRV):/tmp/.
-	docker exec -it $(TST_SRV) sh -c 'sa-learn --restore /tmp/bayesian.database.bak && chown -R amavis: /var/amavis/.spamassassin && rm -rf /tmp/bayesian.database.bak'
-
-test-learn-spam:
-	docker exec -it $(TST_SRV) amavis-learn.sh a
-
-test-status-bayes:
-	docker exec -it $(TST_SRV) sa-learn --dump magic \
-	| sed -r 's/[^ ]+\s+[^ ]+\s+([^ ]+).*non-token data: (.*)/\1\@\2/g' \
-	| sed -r '/atime/s/(.*)@(.*)/echo $$(date --date=@\1 +%Y%b%d-%T)@\2/eg' \
-	| column -t -s @
+$(TST_TGTI):
+	${MAKE} $(TST_ENV) $@
