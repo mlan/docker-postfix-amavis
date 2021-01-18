@@ -85,9 +85,25 @@ dc_log_stamp() {
 }
 
 #
-# Tests
+# Tests if command is in the path
 #
-dc_is_installed() { apk -e info $1 &>/dev/null ;} # true if pkg is installed
+dc_is_command() { [ -x "$(command -v $1)" ] ;}
+
+#
+# Tests if pkgs are installed
+#
+dc_is_installed() {
+	if dc_is_command apk; then
+		ver_cmd="apk -e info"
+	elif dc_is_command dpkg; then
+		ver_cmd="dpkg -s"
+	else
+		dc_log 5 "No package manager found among: apk dpkg"
+	fi
+	for cmd in $@; do
+		$ver_cmd $cmd > /dev/null 2>&1 || return 1
+	done
+}
 
 #
 # Update loglevel
@@ -112,14 +128,14 @@ dc_pkg_versions() {
 	local kern=$(uname -r)
 	local host=$(uname -n)
 	dc_log 5 $host $os $kern
-	if [ -x "$(command -v apk)" ]; then
+	if dc_is_command apk; then
 		ver_cmd="apk info -s"
 		sed_flt="s/.*-(.*)-.*/\1/p"
-	elif [ -x "$(command -v apt)" ]; then
-		ver_cmd="apt list --installed"
-		sed_flt="s/[^ ]+ ([[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+).*/\1/p"
+	elif dc_is_command dpkg; then
+		ver_cmd="dpkg -s"
+		sed_flt="s/Version: ([[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+).*/\1/p"
 	else
-		dc_log 5 "No package manager found among: apk apt"
+		dc_log 5 "No package manager found among: apk dpkg"
 	fi
 	for pkg in $pkgs; do
 		ver=$($ver_cmd $pkg 2> /dev/null | sed -rn "$sed_flt")

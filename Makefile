@@ -10,9 +10,6 @@ BLD_REPO ?= mlan/postfix-amavis
 BLD_VER  ?= latest
 BLD_TGT  ?= full
 
-SRC_CMD  ?= src/kopano/bin/kopano-webaddr.sh -VV
-SRC_VER  ?= $(shell $(SRC_CMD))
-
 TST_REPO ?= $(BLD_REPO)
 TST_VER  ?= $(BLD_VER)
 TST_ENV  ?= -C test

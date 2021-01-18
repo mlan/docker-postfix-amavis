@@ -85,7 +85,7 @@ amavis_setup_dkim() {
 			amavisd showkeys $domain_main > $txtfile
 			#amavisd testkeys $domain_main
 		fi
-		dc_chowncond $user $DOCKER_DKIM_LIB
+		dc_cond_chown $user $DOCKER_DKIM_LIB
 	fi
 }
 
@@ -125,7 +125,7 @@ amavis_register_razor() {
 				dc_log 4 "[amavis] Not registering razor, cannot ping $razor_discovery_server."
 			fi
 		fi
-		dc_chowncond $DOCKER_MILT_RUNAS $razor_home
+		dc_cond_chown $DOCKER_MILT_RUNAS $razor_home
 	fi
 }
 

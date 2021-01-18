@@ -248,7 +248,7 @@ test-up_4: test-up-net acme/acme.json
 	# recv: cat /var/mail/<mbox>
 	#
 	#
-	docker run -d $(SRV_ENV) $(ACME_ENV) \ #$(IMAP_ENV) \
+	docker run -d $(SRV_ENV) $(ACME_ENV) \
 		-e MAIL_BOXES="$(TST_BOX)" \
 		-e SMTPD_SASL_CLIENTAUTH="$(AD_USR_CN):{plain}$(AD_USR_PW) $(EX_MX_CN):{plain}$(EX_MX_PW)" \
 		$(TST_REPO):$(call _ver,$(TST_VER),base)
@@ -336,7 +336,7 @@ test-mail_%: test-mail-send_% test-waits_% test-mail-read_%
 	#
 
 test-logs_%:
-	docker container logs $(SRV_NAME) | grep 'docker-entrypoint.sh' || true
+	docker container logs $(SRV_NAME) #| grep 'docker-entrypoint.sh' || true
 
 test-waits_%:
 	case $* in [1-4]) sleep $(TST_W8S1);; *) sleep $(TST_W8S2);; esac
@@ -353,7 +353,7 @@ test-down-net:
 test-down-vol:
 	docker volume rm $(SRV_NAME) $(CLT_NAME) 2>/dev/null || true
 
-test-down: test-down_0 test-down-net test-down-vol
+test-down: test-down_0 test-down-net test-down-vol acme-destroy
 
 test-down_%:
 	docker rm -f $(CLT_NAME) $(SRV_NAME) $(AUT_NAME) 2>/dev/null || true
@@ -381,9 +381,9 @@ test-mail-read_%:
 	docker exec -it $(SRV_NAME) cat /var/mail/$(AD_USR_CN)@$(tst_dom) | grep $(tst_str)
 
 
-$(addprefix test-,diff down env htop imap logs pop3 sh sv):
-test-%: srv-%
-	
+$(addprefix test-,diff env htop imap logs pop3 sh sv):
+	$(patsubst test-%,srv-%,$@)
+
 $(addsuffix -sh,$(CNT_LIST)):
 	docker exec -it $(patsubst %-sh,$(TST_NAME)-%,$@) sh -c 'exec $$(getent passwd root | sed "s/.*://g")'
 

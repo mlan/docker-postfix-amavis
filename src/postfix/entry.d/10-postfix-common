@@ -152,7 +152,7 @@ postfix_setup_mailbox_ldap() {
 		fi
 		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxes
 			mkdir -p $DOCKER_MAIL_LIB
-			dc_chowncond $DOCKER_APPL_RUNAS $DOCKER_MAIL_LIB
+			dc_cond_chown $DOCKER_APPL_RUNAS $DOCKER_MAIL_LIB
 			postconf virtual_mailbox_base=$DOCKER_MAIL_LIB
 			postconf virtual_uid_maps=static:$(id -u $DOCKER_APPL_RUNAS)
 			postconf virtual_gid_maps=static:$(id -g $DOCKER_APPL_RUNAS)
@@ -200,7 +200,7 @@ postfix_setup_mailbox_lmdb() {
 		postmap lmdb:$POSTFIX_VIRT_MAILBOX
 		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
 			mkdir -p $DOCKER_MAIL_LIB
-			dc_chowncond $DOCKER_APPL_RUNAS $DOCKER_MAIL_LIB
+			dc_cond_chown $DOCKER_APPL_RUNAS $DOCKER_MAIL_LIB
 			postconf virtual_mailbox_base=$DOCKER_MAIL_LIB
 			postconf virtual_uid_maps=static:$(id -u $DOCKER_APPL_RUNAS)
 			postconf virtual_gid_maps=static:$(id -g $DOCKER_APPL_RUNAS)
