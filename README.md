@@ -3,8 +3,9 @@
 ![travis-ci test](https://img.shields.io/travis/mlan/docker-postfix-amavis.svg?label=build&style=flat-square&logo=travis)
 ![docker build](https://img.shields.io/docker/cloud/build/mlan/postfix-amavis.svg?label=build&style=flat-square&logo=docker)
 ![image size](https://img.shields.io/docker/image-size/mlan/postfix-amavis/latest.svg?label=size&style=flat-square&logo=docker)
-![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=flat-square&logo=docker)
 ![docker pulls](https://img.shields.io/docker/pulls/mlan/postfix-amavis.svg?label=pulls&style=flat-square&logo=docker)
+![docker stars](https://img.shields.io/docker/stars/mlan/postfix-amavis.svg?label=stars&style=flat-square&logo=docker)
+![github stars](https://img.shields.io/github/stars/mlan/docker-postfix-amavis.svg?label=stars&style=popout-square&logo=github)
 
 This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](https://en.wikipedia.org/wiki/Message_transfer_agent) (SMTP) service using [Postfix](http://www.postfix.org/) and [Dovecot](https://www.dovecot.org/) with [anti-spam](https://en.wikipedia.org/wiki/Anti-spam_techniques) and anti-virus filter using [amavis](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [ClamAV](https://www.clamav.net/), which also provides sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
 
