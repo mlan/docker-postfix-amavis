@@ -25,7 +25,7 @@ postfix_apply_migrate_fixes() {
 postfix_notify_compat_issues() {
 	local compat_bdb="$(postconf -n | grep -E 'hash:|btree:' | tr -d ' ')"
 	for issue in $compat_bdb; do
-		dc_log 3 "[postfix] Incompatible hash|btree, use FORCE_CONFIG to migrate to lmdb: $issue"
+		dc_log 4 "[postfix] Incompatible hash|btree, use FORCE_CONFIG to migrate to lmdb: $issue"
 	done
 }
 

@@ -37,6 +37,20 @@ postfix_apply_envvars() {
 }
 
 #
+# Copy image version of postfix install files to persistent volume if they
+# are different.
+#
+postfix_install_files() {
+	for file in postfix-files dynamicmaps.cf.d; do
+		if [ -e "$DOCKER_DIST_DIR/$file" ] && ! diff -q $DOCKER_CONF_DIR/$file $DOCKER_DIST_DIR/$file >/dev/null; then
+			rm -rf $DOCKER_CONF_DIR/$file
+			cp -rL $DOCKER_DIST_DIR/$file $DOCKER_CONF_DIR
+			dc_log 5 "[postfix] Updating install file: $file"
+		fi
+	done
+}
+
+#
 # run early to make sure MAIL_DOMAIN is not empty
 #
 postfix_default_domains() {

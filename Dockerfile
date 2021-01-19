@@ -20,6 +20,7 @@ ENV	SVDIR=/etc/service \
 	DOCKER_SSL_DIR=/etc/ssl \
 	DOCKER_SPOOL_DIR=/var/spool/postfix \
 	DOCKER_CONF_DIR=/etc/postfix \
+	DOCKER_DIST_DIR=/etc/postfix.dist \
 	DOCKER_SPAM_DIR=/etc/mail/spamassassin \
 	DOCKER_MAIL_LIB=/var/mail \
 	DOCKER_IMAP_DIR=/etc/dovecot \
@@ -83,6 +84,7 @@ RUN	source docker-common.sh \
 	postfix-ldap \
 #	cyrus-sasl-plain \ # moved back into libsasl
 	cyrus-sasl-login \
+	&& cp -rlL $DOCKER_CONF_DIR $DOCKER_DIST_DIR \
 	&& docker-service.sh \
 	"syslogd -nO- -l$SYSLOG_LEVEL $SYSLOG_OPTIONS" \
 	"crond -f -c /etc/crontabs" \
