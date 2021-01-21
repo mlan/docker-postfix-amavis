@@ -290,6 +290,10 @@ mta-test_imap: mta-hostaddr
 	curl imaps://$(myhost)/inbox -s --ssl --anyauth -k -X "fetch 1 all" \
 	-u $(AD_USR_CN):$(AD_USR_PW)
 
+mta-man:
+	docker-compose exec mta apk --no-cache --update add man-db man-pages \
+	postfix-doc cyrus-sasl-doc dovecot-doc spamassassin-doc clamav-doc razor-doc
+
 db-init:
 
 db-test:

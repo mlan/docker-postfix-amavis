@@ -1,3 +1,7 @@
+# 1.5.1
+
+- [amavis](src/amavis) Fixed annoying Razor warning message.
+
 # 1.5.0
 
 - [docker](Dockerfile) Now use alpine:3.13 (postfix:3.5.8) _BREAKING!_ Incompatible hash|btree, use FORCE_CONFIG to migrate to lmdb.

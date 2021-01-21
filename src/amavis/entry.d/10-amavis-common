@@ -112,12 +112,13 @@ amavis_register_razor() {
 	local razor_home=$DOCKER_MILT_LIB/.razor
 	if dc_is_installed razor; then
 		dc_log 5 "[amavis] Discovering razor servers."
+		mkdir -p $razor_home
 		razor-admin -home=$razor_home -create
-		razor_discovery_server=$(head -n1 $razor_home/servers.discovery.lst)
 		if ([ -n "$auth" ] && [ ! -e $DOCKER_MILTDB_LIB/identity ]); then
 			# register an identity if RAZOR_REGISTRATION is not empty
 			[ -n "$user" ] && user="-user=$user"
 			[ -n "$pass" ] && pass="-pass=$pass"
+			local razor_discovery_server=$(head -n1 $razor_home/servers.discovery.lst)
 			if ping -c1 $razor_discovery_server >/dev/null 2>&1; then
 				local message="$(razor-admin -home=$razor_home $user $pass -register)"
 				dc_log 5 "$message"

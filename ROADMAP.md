@@ -1,10 +1,5 @@
 # Road map
 
-## Bug in Razor?
-
-Use of uninitialized value in concatenation (.) or string at /usr/lib/perl5/vendor_perl/Razor2/Client/Config.pm line 33.
-Use of uninitialized value in concatenation (.) or string at /usr/lib/perl5/vendor_perl/Razor2/Client/Config.pm line 122.
-
 ## Postfix-mysql
 
 - Install
