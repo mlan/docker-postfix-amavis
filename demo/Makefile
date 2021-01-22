@@ -28,7 +28,7 @@ up:
 down:
 	docker-compose down
 
-destroy: auth-gui-down all-destroy_smime
+destroy: auth-gui-down db-gui-down all-destroy_smime
 	docker-compose down -v
 
 config:
@@ -260,11 +260,11 @@ mta-freshclam_nodns:
 mta-clamdtop:
 	docker-compose exec mta clamdtop
 
-mta-debugtools:
+mta-tools:
 	docker-compose exec mta apk --no-cache --update add \
 	nano less lsof htop openldap-clients bind-tools iputils strace
 
-mta-htop: mta-debugtools
+mta-htop: mta-tools
 	docker-compose exec mta htop
 
 mta-encrypt:
@@ -311,12 +311,12 @@ db-gui-down:
 
 app-init: app-public_store app-create_smime
 
-app-debugtools:
+app-tools:
 	docker-compose exec app apt-get update
 	docker-compose exec app apt-get install --yes \
 	less nano ldap-utils htop net-tools lsof iputils-ping dnsutils strace
 
-app-htop: app-debugtools
+app-htop: app-tools
 	docker-compose exec app htop
 
 app-test_smtp: mta-test_smtp
@@ -356,7 +356,7 @@ app-test_oof0:
 app-show_user1:
 	docker-compose exec app kopano-admin --details $(AD_USR_CN)
 
-app-show_user2: app-debugtools
+app-show_user2: app-tools
 	docker-compose exec app ldapsearch -H ldap://auth:389 -xLLL -b $(AD_BASE) '*'
 
 app-show_sync:
@@ -367,6 +367,10 @@ app-create_store:
 
 app-public_store:
 	docker-compose exec app kopano-storeadm -P
+
+#app-add_user:
+#	docker-compose exec app kopano-admin -c $(AD_USR_CN) -p $(AD_USR_PW) \
+#	-e $(AD_USR_CN)@$(MAIL_DOMAIN) -f $(AD_USR_CN) -a 1
 
 $(addprefix app-parms_,archiver dagent gateway ical ldap search server spamd spooler):
 	docker-compose exec app run list_parms $(patsubst app-parms_%,%,$@)

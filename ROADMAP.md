@@ -1,11 +1,5 @@
 # Road map
 
-## Postfix-mysql
-
-- Install
-- Configure
-- Document
-
 ## ACME
 
 Don't make DOCKER_ACME_SSL_DIR=/etc/ssl/acme persistent. We will remove all old certs and keys on updates anyway.

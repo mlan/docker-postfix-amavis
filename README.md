@@ -475,11 +475,11 @@ Using the `MAIL_ALIASES` environment variable you simply provide a space separat
 
 ## LDAP mailbox lookup
 
-Postfix can use an LDAP directory as a source for any of its lookups including virtual mailbox and aliases.
+Postfix can use an [LDAP](https://en.wikipedia.org/wiki/Lightweight_Directory_Access_Protocol) directory as a source for any of its lookups including virtual mailbox and aliases.
 
-For LDAP mailbox lookup to work `LDAP_HOST`, `LDAP_USER_BASE` and `LDAP_QUERY_FILTER_USER` need to be configured. LDAP can also be used for alias lookup, in which case use `LDAP_QUERY_FILTER_ALIAS`. In addition LDAP can be used to lookup mail groups using `LDAP_QUERY_FILTER_GROUP` and `LDAP_QUERY_FILTER_EXPAND`. For detailed explanation see [ldap_table](http://www.postfix.org/ldap_table.5.html).
+For LDAP mailbox lookup to work `LDAP_HOST`, `LDAP_USER_BASE` and `LDAP_QUERY_FILTER_USER` need to be configured. LDAP can also be used for alias lookup, in which case use `LDAP_QUERY_FILTER_ALIAS`. In addition LDAP can be used to lookup mail groups using `LDAP_QUERY_FILTER_GROUP` and `LDAP_QUERY_FILTER_EXPAND`. For detailed explanation see [LDAP client configuration](http://www.postfix.org/ldap_table.5.html).
 
-If the LDAP server is not configured to allow anonymous queries, you use `LDAP_BIND_DN` and `LDAP_BIND_PW` to proved LDAP user and password to be used for the queries.
+If the LDAP server is not configured to allow anonymous queries, you use `LDAP_BIND_DN` and `LDAP_BIND_PW` to provide LDAP user and password to be used for the queries.
 
 ### Required LDAP parameters
 
@@ -516,6 +516,54 @@ Example, only consider group mail from group who is of `objectclass=group`: `LDA
 #### `LDAP_BIND_DN`, `LDAP_BIND_PW`
 
 The defaults for these environment variables are empty. If you do have to bind, do it with this distinguished name and password. Example: `LDAP_BIND_DN=uid=admin,dc=example,dc=com`, `LDAP_BIND_PW=secret`.
+
+## MySQL mailbox lookup
+
+Postfix can use an [MySQL](https://en.wikipedia.org/wiki/MySQL) database as a source for any of its lookups including virtual mailbox and aliases.
+
+For MySQL mailbox lookup to work `MYSQL_HOST`, `MYSQL_DATABASE` and `MYSQL_QUERY_USER` need to be configured. MySQL can also be used for alias lookup, in which case use `MYSQL_QUERY_ALIAS`. For detailed explanation see [MySQL client configuration](http://www.postfix.org/mysql_table.5.html).
+
+If the MySQL server is not configured to allow password less queries, you use `MYSQL_USER` and `MYSQL_PASSWORD` to provide authentication credentials for the queries.
+
+### Required MySQL parameters
+
+#### `MYSQL_HOST`
+
+Use `MYSQL_HOST` to configure the connection to the MySQL server. When the default port (3306) is used just providing the server name is often sufficient. You can also use full URL or part thereof, for example: `MYSQL_HOST=db` or `MYSQL_HOST=db:3306`.
+
+#### `MYSQL_DATABASE`
+
+The `MYSQL_DATABASE`, is the database on which to conduct the searches for users. Example: `MYSQL_DATABASE=postfix`.
+
+#### `MYSQL_QUERY_USER`
+
+The `MYSQL_QUERY_USER` query is used to lookup the recipient,
+where `%s` is a substitute for the address Postfix is trying to resolve.
+To exemplify, lets assume that the table `mailboxes` within the database `postfix` is structured like this:
+
+```mysql
++----+-----------+----------------------+
+| id | recipient | mail                 |
++----+-----------+----------------------+
+|  1 | receiver  | receiver@example.com |
+|  2 | office1   | office1@example.com  |
++----+-----------+----------------------+
+```
+
+We can use the following query to find the recipient that matches the mail address being resolved:
+`MYSQL_QUERY_USER="select recipient from mailboxes where mail='%s' limit 1;"`.
+
+### Optional MySQL parameters
+
+#### `MYSQL_QUERY_ALIAS`
+
+The `MYSQL_QUERY_ALIAS` query is used to retrieve aliases from the database, where `%s` is a
+substitute for the address Postfix is trying to resolve.
+
+#### `MYSQL_USER`, `MYSQL_PASSWORD`
+
+Use `MYSQL_USER` and `MYSQL_PASSWORD` to provide authentication credentials for MySQL queries.
+Example: `MYSQL_USER=admin`, `MYSQL_PASSWORD=secret`. These environment variables are empty by fault.
 
 ## Rewrite recipient email address `REGEX_ALIAS`
 

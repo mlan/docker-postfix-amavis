@@ -1,10 +1,11 @@
 # 1.5.1
 
+- [postfix](src/postfix) Add MySQL mailbox and alias lookup.
 - [amavis](src/amavis) Fixed annoying Razor warning message.
 
 # 1.5.0
 
-- [docker](Dockerfile) Now use alpine:3.13 (postfix:3.5.8) _BREAKING!_ Incompatible hash|btree, use FORCE_CONFIG to migrate to lmdb.
+- [docker](Dockerfile) Now use alpine:3.13 (postfix:3.5.9) _BREAKING!_ Incompatible hash|btree, use FORCE_CONFIG to migrate to lmdb.
 - [postfix](src/postfix/entry.d/10-postfix-common) Install files needs to be updated on persistent volumes.
 - [docker](src/docker/bin/docker-common.sh) Upgrading module.
 - [dovecot](src/dovecot) Configured local mailbox delivery.

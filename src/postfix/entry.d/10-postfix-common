@@ -10,6 +10,7 @@
 DOCKER_DEFAULT_DOMAIN=${DOCKER_DEFAULT_DOMAIN-example.com}
 POSTFIX_VIRT_DOMAIN=${POSTFIX_VIRT_DOMAIN-$DOCKER_CONF_DIR/virt-domains}
 POSTFIX_VIRT_MAILBOX=${POSTFIX_VIRT_MAILBOX-$DOCKER_CONF_DIR/virt-users}
+POSTFIX_VIRT_ALIASES=${POSTFIX_VIRT_ALIASES-$DOCKER_CONF_DIR/virt-aliases}
 POSTFIX_ALIASES=${POSTFIX_ALIASES-$DOCKER_CONF_DIR/aliases}
 POSTFIX_REGEXP_ALIASES=${POSTFIX_REGEXP_ALIASES-$DOCKER_CONF_DIR/regexp-aliases}
 POSTFIX_SASL_PASSWD=${POSTFIX_SASL_PASSWD-$DOCKER_CONF_DIR/sasl-passwords}
@@ -17,6 +18,8 @@ POSTFIX_LDAP_USERS_CF=${POSTFIX_LDAP_USERS_CF-$DOCKER_CONF_DIR/ldap-users.cf}
 POSTFIX_LDAP_ALIAS_CF=${POSTFIX_LDAP_ALIAS_CF-$DOCKER_CONF_DIR/ldap-aliases.cf}
 POSTFIX_LDAP_GROUPS_CF=${POSTFIX_LDAP_GROUPS_CF-$DOCKER_CONF_DIR/ldap-groups.cf}
 POSTFIX_LDAP_EXPAND_CF=${POSTFIX_LDAP_EXPAND_CF-$DOCKER_CONF_DIR/ldap-groups-expand.cf}
+POSTFIX_MYSQL_USERS_CF=${POSTFIX_MYSQL_USERS_CF-$DOCKER_CONF_DIR/mysql-users.cf}
+POSTFIX_MYSQL_ALIAS_CF=${POSTFIX_MYSQL_ALIAS_CF-$DOCKER_CONF_DIR/mysql-aliases.cf}
 
 #
 # Apply envvars
@@ -66,14 +69,16 @@ postfix_default_domains() {
 #
 postfix_setup_domains() {
 	local domains=${MAIL_DOMAIN-$(hostname -d)}
-	if [ -n "$domains" ] && ([ -n "$MAIL_BOXES" ] || ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ])); then
+	if [ -n "$domains" ] && ([ -n "$MAIL_BOXES" ] || \
+	([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ]) || \
+	([ -n "$MYSQL_HOST" ] && [ -n "$MYSQL_DATABASE" ] && [ -n "$MYSQL_QUERY_USER" ])); then
 		dc_log 5 "[postfix] Configuring for domains $domains"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
 			for domain in $domains; do
 				dc_cond_append $POSTFIX_VIRT_DOMAIN "$domain #domain"
 			done
-			postconf virtual_mailbox_domains=lmdb:$POSTFIX_VIRT_DOMAIN
 			postmap  lmdb:$POSTFIX_VIRT_DOMAIN
+			postconf virtual_mailbox_domains=lmdb:$POSTFIX_VIRT_DOMAIN
 		else
 			postconf mydomain=$domains
 			postconf virtual_mailbox_domains='$mydomain'
@@ -84,42 +89,44 @@ postfix_setup_domains() {
 #
 # Set default postfix alias maps
 #
-postfix_default_aliasmap() {
+postfix_default_maps() {
+	postconf alias_maps=
+	postconf alias_database=
+	postconf virtual_lmdb_alias_maps=
 	postconf virtual_ldap_alias_maps=
+	postconf virtual_mysql_alias_maps=
 	postconf virtual_regexp_alias_maps=
-	postconf 'virtual_alias_maps=$virtual_ldap_alias_maps $virtual_regexp_alias_maps'
+	postconf 'virtual_alias_maps=$virtual_lmdb_alias_maps $virtual_ldap_alias_maps $virtual_mysql_alias_maps $virtual_regexp_alias_maps'
+	postconf virtual_lmdb_mailbox_maps=
+	postconf virtual_ldap_mailbox_maps=
+	postconf virtual_mysql_mailbox_maps=
+	postconf 'virtual_mailbox_maps=$virtual_lmdb_mailbox_maps $virtual_ldap_mailbox_maps $virtual_mysql_mailbox_maps'
 }
 
 #
 # Setup postfix aliases
 # MAIL_ALIASES="alias1:target1a,target1b alias2:target2"
 #
-postfix_setup_aliasmap() {
+postfix_setup_alias_lmdb() {
 	local aliasmaps="${1-$MAIL_ALIASES}"
 	if [ -n "$aliasmaps" ]; then
 		dc_log 5 "[postfix] Configuring mail aliases."
 		for aliasmap in $aliasmaps; do
-			dc_cond_append $POSTFIX_ALIASES $(echo "$aliasmap" | sed 's/[:,]/& /g')
+			dc_cond_append $POSTFIX_VIRT_ALIASES $(echo "$aliasmap" | sed 's/[:,]/& /g')
 		done
-		postconf alias_maps=lmdb:$POSTFIX_ALIASES
-		postconf alias_database=lmdb:$POSTFIX_ALIASES
-		postalias $POSTFIX_ALIASES
-		newaliases
-	else
-		dc_log 7 "[postfix] No mail aliases defined."
-		postconf alias_maps=
-		postconf alias_database=
+		postmap lmdb:$POSTFIX_VIRT_ALIASES
+		postconf virtual_lmdb_alias_maps=lmdb:$POSTFIX_VIRT_ALIASES
 	fi
 }
 
 #
 # Allow recipient email address to be rewritten using regexp in REGEX_ALIAS
 #
-postfix_setup_regex_aliasmap() {
+postfix_setup_alias_regex() {
 	if [ -n "$REGEX_ALIAS" ]; then
 		dc_log 5 "[postfix] Configuring recipient address rewrite using regexp: $REGEX_ALIAS"
 		echo "$REGEX_ALIAS" > $POSTFIX_REGEXP_ALIASES
-		postmap $POSTFIX_REGEXP_ALIASES
+		postmap lmdb:$POSTFIX_REGEXP_ALIASES
 		postconf "virtual_regexp_alias_maps=regexp:$POSTFIX_REGEXP_ALIASES"
 	fi
 }
@@ -152,7 +159,7 @@ postfix_setup_smtp_auth() {
 postfix_setup_mailbox_ldap() {
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ]); then
 		dc_log 5 "[postfix] Configuring ldap lookup with ldap-host: $LDAP_HOST"
-		postconf virtual_mailbox_maps=ldap:$POSTFIX_LDAP_USERS_CF
+		postconf virtual_ldap_mailbox_maps=ldap:$POSTFIX_LDAP_USERS_CF
 		_postfix_generate_ldapmap "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_USER" > $POSTFIX_LDAP_USERS_CF
 		if [ -n "$LDAP_QUERY_FILTER_ALIAS" ]; then
 			_postfix_generate_ldapmap "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_ALIAS" > $POSTFIX_LDAP_ALIAS_CF
@@ -163,13 +170,6 @@ postfix_setup_mailbox_ldap() {
 			else
 				postconf "virtual_ldap_alias_maps=ldap:$POSTFIX_LDAP_ALIAS_CF"
 			fi
-		fi
-		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxes
-			mkdir -p $DOCKER_MAIL_LIB
-			dc_cond_chown $DOCKER_APPL_RUNAS $DOCKER_MAIL_LIB
-			postconf virtual_mailbox_base=$DOCKER_MAIL_LIB
-			postconf virtual_uid_maps=static:$(id -u $DOCKER_APPL_RUNAS)
-			postconf virtual_gid_maps=static:$(id -g $DOCKER_APPL_RUNAS)
 		fi
 	fi
 }
@@ -208,17 +208,59 @@ postfix_setup_mailbox_lmdb() {
 		for email in $emails; do
 			dc_cond_append $POSTFIX_VIRT_MAILBOX $email $email
 		done
-#		postconf alias_maps=
-#		postconf alias_database=
-		postconf virtual_mailbox_maps=lmdb:$POSTFIX_VIRT_MAILBOX
 		postmap lmdb:$POSTFIX_VIRT_MAILBOX
-		if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxex
-			mkdir -p $DOCKER_MAIL_LIB
-			dc_cond_chown $DOCKER_APPL_RUNAS $DOCKER_MAIL_LIB
-			postconf virtual_mailbox_base=$DOCKER_MAIL_LIB
-			postconf virtual_uid_maps=static:$(id -u $DOCKER_APPL_RUNAS)
-			postconf virtual_gid_maps=static:$(id -g $DOCKER_APPL_RUNAS)
+		postconf virtual_lmdb_mailbox_maps=lmdb:$POSTFIX_VIRT_MAILBOX
+	fi
+}
+
+#
+# Setup mysql mailboxes
+#
+postfix_setup_mailbox_mysql() {
+	if ([ -n "$MYSQL_HOST" ] && [ -n "$MYSQL_DATABASE" ]); then
+		if [ -n "$MYSQL_QUERY_USER" ]; then
+			dc_log 5 "[postfix] Configuring mysql mailbox lookup with mysql-host: $MYSQL_HOST"
+			_postfix_generate_mysqlmap "$MYSQL_QUERY_USER" > $POSTFIX_MYSQL_USERS_CF
+			postconf virtual_mysql_mailbox_maps=mysql:$POSTFIX_MYSQL_USERS_CF
 		fi
+		if [ -n "$MYSQL_QUERY_ALIAS" ]; then
+			dc_log 5 "[postfix] Configuring mysql alias lookup with mysql-host: $MYSQL_HOST"
+			_postfix_generate_mysqlmap "$MYSQL_QUERY_ALIAS" > $POSTFIX_MYSQL_ALIAS_CF
+			postconf virtual_mysql_alias_maps=mysql:$POSTFIX_MYSQL_ALIAS_CF
+		fi
+	fi
+}
+
+_postfix_generate_mysqlmap() {
+	local query="$@"
+	local hosts="$MYSQL_HOST"
+	local dbname="$MYSQL_DATABASE"
+	local user="$MYSQL_USER"
+	local password="$MYSQL_PASSWORD"
+	cat <<-!cat
+		hosts = $hosts
+		dbname = $dbname
+		query = $query
+	!cat
+	if [ -n "$user" ]; then
+	cat <<-!cat
+		user = $user
+		password = $password
+	!cat
+	fi
+}
+
+#
+# Setup local mailboxes
+#
+postfix_setup_mailbox_local() {
+	if [ -z "$VIRTUAL_TRANSPORT" ]; then # need local mail boxes
+		dc_log 5 "[postfix] No VIRTUAL_TRANSPORT so arranging local mboxes: $DOCKER_MAIL_LIB"
+		mkdir -p $DOCKER_MAIL_LIB
+		dc_cond_chown $DOCKER_APPL_RUNAS $DOCKER_MAIL_LIB
+		postconf virtual_mailbox_base=$DOCKER_MAIL_LIB
+		postconf virtual_uid_maps=static:$(id -u $DOCKER_APPL_RUNAS)
+		postconf virtual_gid_maps=static:$(id -g $DOCKER_APPL_RUNAS)
 	fi
 }
 

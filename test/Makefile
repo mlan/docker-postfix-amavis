@@ -10,7 +10,7 @@ TST_VER  ?= latest
 _ver      = $(if $(findstring latest,$(1)),$(2),$(2)-$(1))
 
 MTA_LIST ?= srv cli
-CNT_LIST ?= $(MTA_LIST) auth
+CNT_LIST ?= $(MTA_LIST) auth db
 TST_NAME ?= test
 
 NET_NAME ?= $(TST_NAME)-net
@@ -31,6 +31,13 @@ AD_MX_PW ?= password1
 AD_FLT_US ?= "(&(objectclass=$(AD_USR_OB))(mail=%s))"
 AD_FLT_PW ?= "(&(objectclass=$(AD_USR_OB))(uid=%u))"
 AD_ATT_PW ?= uid=user
+
+SQL_DB    ?= postfix
+SQL_TAB   ?= mailboxes
+SQL_ROOT_PW ?= secret
+SQL_BD_CN ?= admin
+SQL_BD_PW ?= secret
+SQL_QUERY ?= "select recipient from $(SQL_TAB) where mail='%s' limit 1;"
 
 EX_DOM   ?= my-domain.org
 EX_USR_CN ?= sender
@@ -55,6 +62,20 @@ AUT_ENV  ?= $(NET_ENV) \
 -e LDAPBASE=$(AD_BASE) \
 -e LDAPROOT_CN=$(AD_ROOT_CN) \
 -e LDAPROOT_PW=$(AD_ROOT_PW)
+
+DB_NAME ?= $(TST_NAME)-db
+DB_IMG  ?= mariadb
+DB_FQDN ?= $(DB_NAME).$(AD_DOM)
+DB_ARG  ?= --general-log
+DB_VOL  ?=
+SQL_ENV ?= \
+-e MYSQL_ROOT_PASSWORD=$(SQL_ROOT_PW) \
+-e MYSQL_DATABASE=$(SQL_DB) \
+-e MYSQL_USER=$(SQL_BD_CN) \
+-e MYSQL_PASSWORD=$(SQL_BD_PW)
+DB_ENV  ?= $(NET_ENV) $(SQL_ENV) \
+--name $(DB_NAME) \
+--hostname $(DB_FQDN)
 
 TST_ENV  ?= $(NET_ENV) \
 -e MYORIGIN=$(AD_DOM) \
@@ -87,6 +108,10 @@ ADAU_ENV ?= $(ADBA_ENV) \
 -e LDAP_QUERY_FILTER_PASS=$(AD_FLT_PW)
 ADAL_ENV ?= $(ADLU_ENV) \
 -e LDAP_QUERY_ATTRS_PASS=$(AD_ATT_PW)
+DBLU_ENV ?= $(SQL_ENV) \
+-e MYSQL_HOST=$(DB_NAME) \
+-e MYSQL_QUERY_USER=$(SQL_QUERY)
+
 TLS_ENV  ?= \
 -v $(shell pwd)/ssl:/etc/ssl/postfix \
 -e SMTPD_TLS_CERT_FILE=/etc/ssl/postfix/$(notdir $(SRV_CERT)) \
@@ -147,13 +172,24 @@ uid: $(AD_MX_CN)
 userPassword: $(AD_MX_PW)
 endef
 
+export define SQL_ADD_DATA
+create table mailboxes(
+	id INT NOT NULL AUTO_INCREMENT,
+	recipient VARCHAR(100) NOT NULL,
+	mail VARCHAR(40) NOT NULL,
+	PRIMARY KEY ( id )
+);
+insert into mailboxes (recipient, mail) values ("$(AD_USR_CN)@$(AD_DOM)", "$(AD_USR_CN)@$(AD_DOM)");
+insert into mailboxes (recipient, mail) values ("$(AD_MX_CN)@$(AD_DOM)", "$(AD_MX_CN)@$(AD_DOM)");
+endef
+
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
 
 ps:
 	docker ps -a
 
-test-all: test-up_0 $(addprefix test_,1 2 3 4 5 6 7 8)
+test-all: test-up_0 $(addprefix test_,1 2 3 4 5 6 7 8 9)
 	
 
 test_%: test-up_% test-waitl_% test-logs_% test-mail_% test-down_%
@@ -221,11 +257,26 @@ test-up_2: test-up-net test-up-auth_2
 	docker run -d $(CLT_ENV) -e RELAYHOST=[$(SRV_NAME)] -e MYDESTINATION= \
 		$(TST_REPO):$(call _ver,$(TST_VER),mini)
 
-test-up_3: test-up-net test-up-auth_3 acme/acme.json
+test-up_3: test-up-net test-up-db_3
 	#
 	#
 	#
-	# test (3) ldap sasl, basic and selfsigned tls over smtps, subm w ldap lookup
+	# test (3) basic mta function and mysql lookup
+	#
+	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox
+	# recv: cat srv postfix mbox
+	#
+	#
+	docker run -d $(SRV_ENV) $(DBLU_ENV) \
+		$(TST_REPO):$(call _ver,$(TST_VER),mini)
+	docker run -d $(CLT_ENV) -e RELAYHOST=[$(SRV_NAME)] -e MYDESTINATION= \
+		$(TST_REPO):$(call _ver,$(TST_VER),mini)
+
+test-up_4: test-up-net test-up-auth_4 acme/acme.json
+	#
+	#
+	#
+	# test (4) ldap sasl, basic and selfsigned tls over smtps, subm w ldap lookup
 	#
 	# send: curl smtps://clt -> clt smtps://srv:587 -> srv var/mail/<mbox>
 	# recv: cat /var/mail/<mbox>
@@ -238,11 +289,11 @@ test-up_3: test-up-net test-up-auth_3 acme/acme.json
 		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
 		$(TST_REPO):$(call _ver,$(TST_VER),base)
 
-test-up_4: test-up-net acme/acme.json
+test-up_5: test-up-net acme/acme.json
 	#
 	#
 	#
-	# test (4) passwd-file sasl and acme tls over subm
+	# test (5) passwd-file sasl and acme tls over subm
 	#
 	# send: curl smtp://clt -> clt smtps://srv:587 -> srv var/mail/<mbox>
 	# recv: cat /var/mail/<mbox>
@@ -257,11 +308,11 @@ test-up_4: test-up-net acme/acme.json
 		-e MYDESTINATION= -e SMTP_TLS_SECURITY_LEVEL=encrypt \
 		$(TST_REPO):$(call _ver,$(TST_VER),mini)
 
-test-up_5: test-up-net
+test-up_6: test-up-net
 	#
 	#
 	#
-	# test (5) basic milter function and selfsigned tls
+	# test (6) basic milter function and selfsigned tls
 	#
 	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
 	# recv: cat /var/mail/<mbox>
@@ -274,11 +325,11 @@ test-up_5: test-up-net
 		-e MYDESTINATION= -e LOG_LEVEL=$(TST_ALOG) \
 		$(TST_REPO):$(call _ver,$(TST_VER),full)
 
-test-up_6: test-down-vol test-up-net
+test-up_7: test-down-vol test-up-net
 	#
 	#
 	#
-	# test (6) dkim and multiple domains
+	# test (7) dkim and multiple domains
 	#
 	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
 	# recv: cat /var/mail/<mbox>
@@ -292,11 +343,11 @@ test-up_6: test-down-vol test-up-net
 		-e MYDESTINATION= -e MAIL_DOMAIN="$(AD_DOM)" \
 		$(TST_REPO):$(call _ver,$(TST_VER),full)
 
-test-up_7: test-up-net test_6
+test-up_8: test-up-net test_7
 	#
 	#
 	#
-	# test (7) persistent /srv no env given
+	# test (8) persistent /srv no env given
 	#
 	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
 	# recv: cat /var/mail/<mbox>
@@ -307,11 +358,11 @@ test-up_7: test-up-net test_6
 	docker run -d $(CLT_ENV) $(CLTV_ENV) \
 		$(TST_REPO):$(call _ver,$(TST_VER),full)
 
-test-up_8: test-up-net test_7
+test-up_9: test-up-net test_8
 	#
 	#
 	#
-	# test (8) persistent /srv FORCE_CONFIG
+	# test (9) persistent /srv FORCE_CONFIG
 	#
 	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
 	# recv: cat /var/mail/<mbox>
@@ -339,10 +390,10 @@ test-logs_%:
 	docker container logs $(SRV_NAME) #| grep 'docker-entrypoint.sh' || true
 
 test-waits_%:
-	case $* in [1-4]) sleep $(TST_W8S1);; *) sleep $(TST_W8S2);; esac
+	case $* in [1-5]) sleep $(TST_W8S1);; *) sleep $(TST_W8S2);; esac
 
 test-waitl_%:
-	case $* in [1-4]) sleep $(TST_W8L1);; *) sleep $(TST_W8L2);; esac
+	case $* in [1-5]) sleep $(TST_W8L1);; *) sleep $(TST_W8L2);; esac
 
 test-up-net:
 	docker network create $(NET_NAME) 2>/dev/null || true
@@ -356,7 +407,7 @@ test-down-vol:
 test-down: test-down_0 test-down-net test-down-vol acme-destroy
 
 test-down_%:
-	docker rm -f $(CLT_NAME) $(SRV_NAME) $(AUT_NAME) 2>/dev/null || true
+	docker rm -f $(CLT_NAME) $(SRV_NAME) $(AUT_NAME) $(DB_NAME) 2>/dev/null || true
 	if [ $* -ge 0 ]; then sleep $(TST_W8S1); fi
 
 test-up-auth_%:
@@ -364,10 +415,15 @@ test-up-auth_%:
 	sleep $(TST_W8AU)
 	echo "$$LDIF_ADD_DATA" | docker exec -i $(AUT_NAME) ldapadd -Q
 
+test-up-db_%:
+	docker run -d $(DB_ENV) $(DB_VOL) $(DB_IMG) $(DB_ARG)
+	sleep $(TST_W8L1)
+	echo "$$SQL_ADD_DATA" | docker exec -i $(DB_NAME) mysql -u$(SQL_BD_CN) -p$(SQL_BD_PW) $(SQL_DB)
+
 
 test-conf_%:
-	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(EX_DOM); else echo $(AD_DOM); fi ))
-	$(eval tst_spro := $(shell if [ $* -eq 3 ]; then echo smtps; else echo smtp; fi ))
+	$(eval tst_dom := $(shell if [ $* -ge 7 ]; then echo $(EX_DOM); else echo $(AD_DOM); fi ))
+	$(eval tst_spro := $(shell if [ $* -eq 4 ]; then echo smtps; else echo smtp; fi ))
 
 test-mail-send_%: test-conf_%
 	@printf "From: <$(EX_USR_CN)@$(AD_DOM)>\nTo: <$(AD_USR_CN)@$(tst_dom)>\nDate: $$(date)\nSubject:$(MAIL_SUB)$*\n$(MAIL_MSG)$*\n" \
@@ -376,8 +432,8 @@ test-mail-send_%: test-conf_%
 	--url $(tst_spro)://$(CLT_NAME) -u $(AD_USR_CN):$(AD_USR_PW) --ssl --anyauth -k
 
 test-mail-read_%:
-	$(eval tst_str := $(shell if [ $* -eq 6 ]; then echo DKIM-Signature; else echo ^$(MAIL_MSG)$*; fi ))
-	$(eval tst_dom := $(shell if [ $* -ge 6 ]; then echo $(EX_DOM); else echo $(AD_DOM); fi ))
+	$(eval tst_str := $(shell if [ $* -eq 7 ]; then echo DKIM-Signature; else echo ^$(MAIL_MSG)$*; fi ))
+	$(eval tst_dom := $(shell if [ $* -ge 7 ]; then echo $(EX_DOM); else echo $(AD_DOM); fi ))
 	docker exec -it $(SRV_NAME) cat /var/mail/$(AD_USR_CN)@$(tst_dom) | grep $(tst_str)
 
 
@@ -396,10 +452,10 @@ $(addsuffix -logs,$(CNT_LIST)):
 $(addsuffix -diff,$(CNT_LIST)):
 	docker container diff $(patsubst %-diff,$(TST_NAME)-%,$@)
 
-$(addsuffix -debugtools,$(CNT_LIST)):
-	docker exec -it $(patsubst %-debugtools,$(TST_NAME)-%,$@) \
+$(addsuffix -tools,$(CNT_LIST)):
+	docker exec -it $(patsubst %-tools,$(TST_NAME)-%,$@) \
 	apk --no-cache --update add \
-	nano less lsof htop openldap-clients bind-tools iputils
+	nano less lsof htop openldap-clients bind-tools iputils mariadb-client
 
 $(addsuffix -htop,$(CNT_LIST)):
 	docker exec -it $(patsubst %-htop,$(TST_NAME)-%,$@) htop
@@ -437,6 +493,10 @@ $(addsuffix -bayes-status,$(MTA_LIST)):
 
 auth-test:
 	docker exec $(AUT_NAME) ldapsearch
+
+db-test:
+	echo "select * from $(SQL_TAB)" | \
+	docker exec -i $(DB_NAME) mysql -t -u$(SQL_BD_CN) -p$(SQL_BD_PW) $(SQL_DB)
 
 $(addprefix test-tls_,25 465 587):
 test-tls_%:

@@ -82,6 +82,7 @@ RUN	source docker-common.sh \
 	runit \
 	postfix \
 	postfix-ldap \
+	postfix-mysql \
 #	cyrus-sasl-plain \ # moved back into libsasl
 	cyrus-sasl-login \
 	&& cp -rlL $DOCKER_CONF_DIR $DOCKER_DIST_DIR \

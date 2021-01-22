@@ -12,12 +12,15 @@
 #
 if dc_is_unlocked; then
 	postfix_setup_domains
+	postfix_default_maps
 	postfix_setup_smtp_auth
 	postfix_setup_mailbox_lmdb
 	postfix_setup_mailbox_ldap
-	postfix_default_aliasmap
-	postfix_setup_aliasmap
-	postfix_setup_regex_aliasmap
+	postfix_setup_mailbox_mysql
+	postfix_setup_mailbox_local
+	postfix_setup_alias_lmdb
+#	postfix_setup_aliasmap
+	postfix_setup_alias_regex
 	postfix_export_tls_cert
 	postfix_generate_tls_cert
 	postfix_export_tls_cert
