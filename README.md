@@ -12,29 +12,29 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 ## Features
 
 - MTA (SMTP) server and client [Postfix](http://www.postfix.org/)
-- Anti-spam filter [amavis](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/)
-- Anti-virus [ClamAV](https://www.clamav.net/)
-- Sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail)
-- SMTP client authentication on the SMTPS (port 465) and submission (port 587) using [Dovecot](https://www.dovecot.org/)
-- Hooks for integrating [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using the reverse proxy [Traefik](https://docs.traefik.io/)
-- Consolidated configuration and run data under `/srv` to facilitate persistent storage
+- [Anti-spam](#incoming-anti-spam-and-anti-virus) filter [amavis](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/)
+- [Anti-virus](#incoming-anti-spam-and-anti-virus) [ClamAV](https://www.clamav.net/)
+- Sender authentication using [SPF](#incoming-spf-sender-authentication) and [DKIM](#dkim-sender-authentication)
+- [SMTP client authentication](#incoming-smtps-and-submission-client-authentication) on the SMTPS (port 465) and submission (port 587) using [Dovecot](https://www.dovecot.org/)
+- Hooks for integrating [Let’s Encrypt](#lets-encrypt-lts-certificates-using-traefik) LTS certificates using the reverse proxy [Traefik](https://docs.traefik.io/)
+- Consolidated configuration and run data under `/srv` to facilitate [persistent storage](#persistent-storage)
 - Simplified configuration of [table](#table-mailbox-lookup) mailbox lookup using environment variables
 - Simplified configuration of [LDAP](#ldap-mailbox-lookup) mailbox and alias lookup using environment variables
-- Simplified configuration of [MySQL](#mysql-mailbox-lookup)) mailbox and alias lookup using environment variables
-- Simplified configuration of [SMTP](https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol) relay using environment variables
+- Simplified configuration of [MySQL](#mysql-mailbox-lookup) mailbox and alias lookup using environment variables
+- Simplified configuration of [SMTP relay](#outgoing-smtp-relay) using environment variables
 - Simplified configuration of [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail) keys using environment variables
-- Simplified configuration of SMTP [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) using environment variables
+- Simplified configuration of secure SMTP, IMAP and POP3 [TLS](#incoming-tls-support) using environment variables
 - Simplified generation of Diffie-Hellman parameters needed for [EDH](https://en.wikipedia.org/wiki/Diffie–Hellman_key_exchange) using utility script
-- [Kopano-spamd](https://kb.kopano.io/display/WIKI/Kopano-spamd) integration with [mlan/kopano](https://github.com/mlan/docker-kopano)
+- [Kopano-spamd](#kopano-spamd-integration-with-mlankopano) integration with [mlan/kopano](https://github.com/mlan/docker-kopano)
 - Multi-staged build providing the images `mini`, `base` and `full`
-- Configuration using environment variables
-- Log directed to docker daemon with configurable level
+- Configuration using [environment variables](#environment-variables)
+- [Log](#logging-syslog_level-log_level-sa_debug) directed to docker daemon with configurable level
 - Built in utility script `amavis-ls` which lists the contents of quarantine
 - Built in utility script `run` helping configuring Postfix, AMaViS, SpamAssassin, Razor, ClamAV and Dovecot
 - Makefile which can build images and do some management and testing
 - Health check
 - Small image size based on [Alpine Linux](https://alpinelinux.org/)
-- Demo based on `docker-compose.yml` and `Makefile` files
+- [Demo](#demo) based on `docker-compose.yml` and `Makefile` files
 
 ## Tags
 
@@ -341,7 +341,7 @@ docker exec -it mta run update_postfix_dhparam
 
 ### Let’s Encrypt LTS certificates using Traefik
 
-Let’s Encrypt provide free, automated, authorized certificates when you can demonstrate control over your domain. Automatic Certificate Management Environment (ACME) is the protocol used for such demonstration. There are many agents and applications that supports ACME, e.g., [certbot](https://certbot.eff.org/). The reverse proxy [Traefik](https://docs.traefik.io/) also supports ACME.
+[Let’s Encrypt](https://letsencrypt.org/) provide free, automated, authorized certificates when you can demonstrate control over your domain. Automatic Certificate Management Environment (ACME) is the protocol used for such demonstration. There are many agents and applications that supports ACME, e.g., [certbot](https://certbot.eff.org/). The reverse proxy [Traefik](https://docs.traefik.io/) also supports ACME.
 
 #### `ACME_FILE`, `ACME_POSTHOOK`
 
@@ -361,7 +361,7 @@ Moreover, do not set `SMTPD_TLS_CERT_FILE` and/or `SMTPD_TLS_KEY_FILE` when usin
 
 ## Incoming anti-spam and anti-virus
 
-[amavis](https://www.amavis.org/) is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or [SpamAssassin](https://spamassassin.apache.org/). Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS block-lists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
+[Amavis](https://www.amavis.org/) is a high-performance interface between mailer (MTA) and content checkers: virus scanners, and/or [SpamAssassin](https://spamassassin.apache.org/). Apache SpamAssassin is the #1 open source anti-spam platform giving system administrators a filter to classify email and block spam (unsolicited bulk email). It uses a robust scoring framework and plug-ins to integrate a wide range of advanced heuristic and statistical analysis tests on email headers and body text including text analysis, Bayesian filtering, DNS block-lists, and collaborative filtering databases. Clam AntiVirus is an anti-virus toolkit, designed especially for e-mail scanning on mail gateways.
 
 [Vipul's Razor](http://razor.sourceforge.net/) is a distributed, collaborative, spam detection and filtering network. It uses a fuzzy [checksum](http://en.wikipedia.org/wiki/Checksum) technique to identify
 message bodies based on signatures submitted by users, or inferred by
@@ -429,11 +429,11 @@ respectively when a message is placed in either `var/lib/kopano/spamd/spam` or
 
 ## Incoming SPF sender authentication
 
-Sender Policy Framework (SPF) is an [email authentication](https://en.wikipedia.org/wiki/Email_authentication) method designed to detect forged sender addresses in emails. SPF allows the receiver to check that an email claiming to come from a specific domain comes from an IP address authorized by that domain's administrators. The list of authorized sending hosts and IP addresses for a domain is published in the [DNS](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions) records for that domain.
+[Sender Policy Framework (SPF)](https://en.wikipedia.org/wiki/Sender_Policy_Framework) is an [email authentication](https://en.wikipedia.org/wiki/Email_authentication) method designed to detect forged sender addresses in emails. SPF allows the receiver to check that an email claiming to come from a specific domain comes from an IP address authorized by that domain's administrators. The list of authorized sending hosts and IP addresses for a domain is published in the [DNS](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions) records for that domain.
 
 ## DKIM sender authentication
 
-Domain-Keys Identified Mail (DKIM) is an [email authentication](https://en.wikipedia.org/wiki/Email_authentication) method designed to detect forged sender addresses in emails. DKIM allows the receiver to check that an email claimed to have come from a specific [domain](https://en.wikipedia.org/wiki/Domain_name) was indeed authorized by the owner of that domain. It achieves this by affixing a [digital signature](https://en.wikipedia.org/wiki/Digital_signature), linked to a domain name, `MAIL_DOMAIN`, to each outgoing email message, which the receiver can verify by using the DKIM key published in the [DNS](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions) records for that domain.
+[Domain-Keys Identified Mail (DKIM)](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail) is an [email authentication](https://en.wikipedia.org/wiki/Email_authentication) method designed to detect forged sender addresses in emails. DKIM allows the receiver to check that an email claimed to have come from a specific [domain](https://en.wikipedia.org/wiki/Domain_name) was indeed authorized by the owner of that domain. It achieves this by affixing a [digital signature](https://en.wikipedia.org/wiki/Digital_signature), linked to a domain name, `MAIL_DOMAIN`, to each outgoing email message, which the receiver can verify by using the DKIM key published in the [DNS](https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions) records for that domain.
 
 amavis is configured to check the digital signature of incoming email as well as add digital signatures to outgoing email.
 
