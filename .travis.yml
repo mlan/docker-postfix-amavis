@@ -5,12 +5,4 @@ services: docker
 install: make build-all
 before_script: sudo apt-get install -y ldap-utils openssl jq
 script:
-  - make test-up_0
-  - make test_1
-  - make test_2
-  - make test_3
-  - make test_4
-  - make test_5
-  - make test_6
-  - make test_7
-  - make test_8
+  - make test-all

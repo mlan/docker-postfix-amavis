@@ -18,8 +18,9 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 - SMTP client authentication on the SMTPS (port 465) and submission (port 587) using [Dovecot](https://www.dovecot.org/)
 - Hooks for integrating [Let’s Encrypt](https://letsencrypt.org/) LTS certificates using the reverse proxy [Traefik](https://docs.traefik.io/)
 - Consolidated configuration and run data under `/srv` to facilitate persistent storage
-- Simplified configuration of mailbox table lookup using environment variables
-- Simplified configuration of [LDAP](https://en.wikipedia.org/wiki/Lightweight_Directory_Access_Protocol) mailbox and alias lookup using environment variables
+- Simplified configuration of [table](#table-mailbox-lookup) mailbox lookup using environment variables
+- Simplified configuration of [LDAP](#ldap-mailbox-lookup) mailbox and alias lookup using environment variables
+- Simplified configuration of [MySQL](#mysql-mailbox-lookup)) mailbox and alias lookup using environment variables
 - Simplified configuration of [SMTP](https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol) relay using environment variables
 - Simplified configuration of [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail) keys using environment variables
 - Simplified configuration of SMTP [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) using environment variables

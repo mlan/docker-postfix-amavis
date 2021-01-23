@@ -14,7 +14,7 @@ TST_REPO ?= $(BLD_REPO)
 TST_VER  ?= $(BLD_VER)
 TST_ENV  ?= -C test
 TST_TGTE ?= $(addprefix test-,all diff down env htop imap logs mail mail-send pop3 sh sv up)
-TST_INDX ?= 1 2 3 4 5 6 7 8
+TST_INDX ?= 1 2 3 4 5 6 7 8 9
 TST_TGTI ?= $(addprefix test_,$(TST_INDX)) $(addprefix test-up_,0 $(TST_INDX))
 
 export TST_REPO TST_VER

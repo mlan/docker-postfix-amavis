@@ -66,7 +66,6 @@ AUT_ENV  ?= $(NET_ENV) \
 DB_NAME ?= $(TST_NAME)-db
 DB_IMG  ?= mariadb
 DB_FQDN ?= $(DB_NAME).$(AD_DOM)
-DB_ARG  ?= --general-log
 DB_VOL  ?=
 SQL_ENV ?= \
 -e MYSQL_ROOT_PASSWORD=$(SQL_ROOT_PW) \
@@ -416,7 +415,7 @@ test-up-auth_%:
 	echo "$$LDIF_ADD_DATA" | docker exec -i $(AUT_NAME) ldapadd -Q
 
 test-up-db_%:
-	docker run -d $(DB_ENV) $(DB_VOL) $(DB_IMG) $(DB_ARG)
+	docker run -d $(DB_ENV) $(DB_VOL) $(DB_IMG)
 	sleep $(TST_W8L1)
 	echo "$$SQL_ADD_DATA" | docker exec -i $(DB_NAME) mysql -u$(SQL_BD_CN) -p$(SQL_BD_PW) $(SQL_DB)
 
@@ -438,7 +437,7 @@ test-mail-read_%:
 
 
 $(addprefix test-,diff env htop imap logs pop3 sh sv):
-	$(patsubst test-%,srv-%,$@)
+	${MAKE} $(patsubst test-%,srv-%,$@)
 
 $(addsuffix -sh,$(CNT_LIST)):
 	docker exec -it $(patsubst %-sh,$(TST_NAME)-%,$@) sh -c 'exec $$(getent passwd root | sed "s/.*://g")'
