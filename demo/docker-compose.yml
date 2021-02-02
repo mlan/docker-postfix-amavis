@@ -63,13 +63,13 @@ services:
       - MESSAGE_SIZE_LIMIT=${MESSAGE_SIZE_LIMIT-25600000}
       - LDAP_HOST=auth
       - VIRTUAL_TRANSPORT=lmtp:app:2003
-#      - VIRTUAL_TRANSPORT=lmtp:unix:private/transport
       - SMTP_RELAY_HOSTAUTH=${SMTP_RELAY_HOSTAUTH-}
       - SMTP_TLS_SECURITY_LEVEL=${SMTP_TLS_SECURITY_LEVEL-}
       - SMTP_TLS_WRAPPERMODE=${SMTP_TLS_WRAPPERMODE-no}
       - SMTPD_USE_TLS=yes
       - LDAP_USER_BASE=ou=${AD_USR_OU-users},${AD_BASE-dc=example,dc=com}
       - LDAP_QUERY_FILTER_USER=(&(objectclass=${AD_USR_OB-kopano-user})(mail=%s))
+      - LDAP_QUERY_FILTER_ALIAS=(&(objectclass=${AD_USR_OB-kopano-user})(kopanoAliases=%s))
       - LDAP_QUERY_ATTRS_PASS=uid=user
       - REGEX_ALIAS=${REGEX_ALIAS-}
       - DKIM_SELECTOR=${DKIM_SELECTOR-default}

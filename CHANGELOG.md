@@ -1,3 +1,15 @@
+# 1.5.2
+
+- [postfix](src/postfix) Fixed `MAIL_ALIASES` bug, due to, we now use virtual so table format is: pattern address, address.
+- [postfix](src/postfix) Now make `LDAP_QUERY_ATTRS_USER=mail` configurable.
+- [postfix](src/postfix) `MAIL_BOXES` can now take mailbox path; address:mailbox.
+- [dovecot](src/dovecot) Now install mysql and pop3d modules.
+- [dovecot](src/dovecot) Support for mysql authentication using `MYSQL_QUERY_PASS`.
+- [dovecot](src/dovecot) Parameters can now set by envvars prefixed with `DOVECOT_`.
+- [dovecot](src/dovecot) Renamed `conf.d/*.conf` files.
+- [test](test) Now also test Dovecot IMAP.
+- [test](test) Now also properly test `MAIL_BOXES` and `MAIL_ALIASES`.
+
 # 1.5.1
 
 - [postfix](src/postfix) Add MySQL mailbox and alias lookup.

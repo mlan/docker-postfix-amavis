@@ -26,23 +26,30 @@ AD_USR_OB ?= inetOrgPerson
 AD_USR_OU ?= users
 AD_USR_CN ?= receiver
 AD_USR_PW ?= secret
+AD_USR_AD ?= $(AD_USR_CN)@$(AD_DOM)
+AD_USR_BX ?= $(AD_USR_CN)
+AD_USR_AL ?= my-alias
 AD_MX_CN ?= office1
 AD_MX_PW ?= password1
 AD_FLT_US ?= "(&(objectclass=$(AD_USR_OB))(mail=%s))"
 AD_FLT_PW ?= "(&(objectclass=$(AD_USR_OB))(uid=%u))"
 AD_ATT_PW ?= uid=user
 
-SQL_DB    ?= postfix
-SQL_TAB   ?= mailboxes
+SQL_DB   ?= postfix
+SQL_TAB  ?= users
 SQL_ROOT_PW ?= secret
 SQL_BD_CN ?= admin
 SQL_BD_PW ?= secret
-SQL_QUERY ?= "select recipient from $(SQL_TAB) where mail='%s' limit 1;"
+SQL_Q_CN ?= "select mail from $(SQL_TAB) where mail='%s' limit 1;"
+SQL_Q_PW ?= "select password, userid as user from $(SQL_TAB) where userid = '%u'"
 
 EX_DOM   ?= my-domain.org
 EX_USR_CN ?= sender
 EX_MX_CN ?= office2
 EX_MX_PW ?= password2
+AD_SND_AD ?= $(EX_USR_CN)@$(AD_DOM)
+EX_USR_AD ?= $(AD_USR_CN)@$(EX_DOM)
+EX_USR_BX ?= $(EX_DOM)/$(AD_USR_CN)
 
 MAIL_SUB ?= ~~~test~subject~~~
 MAIL_MSG ?= ~~~test~message~~~
@@ -109,7 +116,13 @@ ADAL_ENV ?= $(ADLU_ENV) \
 -e LDAP_QUERY_ATTRS_PASS=$(AD_ATT_PW)
 DBLU_ENV ?= $(SQL_ENV) \
 -e MYSQL_HOST=$(DB_NAME) \
--e MYSQL_QUERY_USER=$(SQL_QUERY)
+-e MYSQL_QUERY_USER=$(SQL_Q_CN) \
+-e MYSQL_QUERY_PASS=$(SQL_Q_PW)
+
+DOVE_ENV ?= \
+-e VIRTUAL_TRANSPORT=lmtp:unix:private/transport \
+-e DOVECOT_AUTH_USERNAME_FORMAT=%Ln
+#-e DOVECOT_DISABLE_PLAINTEXT_AUTH=no \
 
 TLS_ENV  ?= \
 -v $(shell pwd)/ssl:/etc/ssl/postfix \
@@ -122,9 +135,9 @@ ACME_ENV ?= \
 IMAP_ENV ?= \
 -e VIRTUAL_TRANSPORT=lmtp:unix:private/transport
 
-TST_BOX  ?= $(AD_USR_CN)@$(AD_DOM) $(EX_USR_CN)@$(AD_DOM)
-TST_BOX2 ?= $(AD_USR_CN)@$(AD_DOM) $(AD_USR_CN)@$(EX_DOM)
-TST_ALS  ?= root:$(AD_USR_CN),$(AD_USR_CN)@$(AD_DOM) postmaster:$(AD_USR_CN)
+TST_BOX  ?= $(AD_USR_AD):$(AD_USR_BX) $(AD_SND_AD)
+TST_BOX2 ?= $(AD_USR_AD):$(AD_USR_BX) $(EX_USR_AD):$(EX_USR_BX)
+TST_ALS  ?= $(AD_USR_AL):$(AD_USR_AD) postmaster:$(AD_USR_AD),$(AD_USR_CN)
 TST_DK_S ?= default
 
 CURL_OPT ?= -s -v
@@ -160,7 +173,7 @@ objectClass: $(AD_USR_OB)
 cn: $(AD_USR_CN)
 sn: $(AD_USR_CN)
 uid: $(AD_USR_CN)
-mail: $(AD_USR_CN)@$(AD_DOM)
+mail: $(AD_USR_AD)
 userPassword: $(AD_USR_PW)
 
 dn: uid=$(AD_MX_CN),ou=$(AD_USR_OU),$(AD_BASE)
@@ -172,14 +185,15 @@ userPassword: $(AD_MX_PW)
 endef
 
 export define SQL_ADD_DATA
-create table mailboxes(
-	id INT NOT NULL AUTO_INCREMENT,
-	recipient VARCHAR(100) NOT NULL,
-	mail VARCHAR(40) NOT NULL,
-	PRIMARY KEY ( id )
+create table $(SQL_TAB)(
+	id int not null auto_increment,
+	userid varchar(128) not null,
+	password varchar(64) not null,
+	mail varchar(128),
+	primary key ( id )
 );
-insert into mailboxes (recipient, mail) values ("$(AD_USR_CN)@$(AD_DOM)", "$(AD_USR_CN)@$(AD_DOM)");
-insert into mailboxes (recipient, mail) values ("$(AD_MX_CN)@$(AD_DOM)", "$(AD_MX_CN)@$(AD_DOM)");
+insert into $(SQL_TAB) (userid, password, mail) values ("$(AD_USR_CN)", concat("{PLAIN-MD5}",md5("$(AD_USR_PW)")), "$(AD_USR_AD)");
+insert into $(SQL_TAB) (userid, password) values ("$(AD_MX_CN)", concat("{PLAIN-MD5}",md5("$(AD_MX_PW)")));
 endef
 
 variables:
@@ -229,15 +243,16 @@ test-up_1: test-up-net
 	#
 	#
 	#
-	# test (1) basic mta function and virtual lookup
+	# test (1) basic mta function and virtual alias lookup
 	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox
-	# recv: cat srv postfix mbox
+	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox:$(AD_USR_BX)
+	# recv: cat srv mbox:$(AD_USR_BX)
 	#
 	#
-	docker run -d $(SRV_ENV) -e MAIL_BOXES="$(TST_BOX)" \
+	docker run -d $(SRV_ENV) \
+		-e MAIL_BOXES="$(TST_BOX)" -e MAIL_ALIASES="$(TST_ALS)" \
 		$(TST_REPO):$(call _ver,$(TST_VER),mini)
-	docker run -d $(CLT_ENV) -e MAIL_ALIASES="$(TST_ALS)" \
+	docker run -d $(CLT_ENV) \
 		-e RELAYHOST=[$(SRV_NAME)] -e MYDESTINATION= \
 		$(TST_REPO):$(call _ver,$(TST_VER),mini)
 
@@ -247,8 +262,8 @@ test-up_2: test-up-net test-up-auth_2
 	#
 	# test (2) basic mta function and ldap lookup
 	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox
-	# recv: cat srv postfix mbox
+	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox:$(AD_USR_AD)
+	# recv: cat srv mbox:$(AD_USR_AD)
 	#
 	#
 	docker run -d $(SRV_ENV) $(ADLU_ENV) \
@@ -256,18 +271,18 @@ test-up_2: test-up-net test-up-auth_2
 	docker run -d $(CLT_ENV) -e RELAYHOST=[$(SRV_NAME)] -e MYDESTINATION= \
 		$(TST_REPO):$(call _ver,$(TST_VER),mini)
 
-test-up_3: test-up-net test-up-db_3
+test-up_3: test-up-net test-up-db_3 acme/acme.json
 	#
 	#
 	#
-	# test (3) basic mta function and mysql lookup
+	# test (3) basic mta function and mysql lookup and imap
 	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox
-	# recv: cat srv postfix mbox
+	# send: curl smtp://clt -> clt smtp://srv -> srv dovecot mbox
+	# recv: imaps://srv/inbox
 	#
 	#
-	docker run -d $(SRV_ENV) $(DBLU_ENV) \
-		$(TST_REPO):$(call _ver,$(TST_VER),mini)
+	docker run -d $(SRV_ENV) $(DBLU_ENV) $(TLS_ENV) $(DOVE_ENV) \
+		$(TST_REPO):$(call _ver,$(TST_VER),base)
 	docker run -d $(CLT_ENV) -e RELAYHOST=[$(SRV_NAME)] -e MYDESTINATION= \
 		$(TST_REPO):$(call _ver,$(TST_VER),mini)
 
@@ -277,11 +292,11 @@ test-up_4: test-up-net test-up-auth_4 acme/acme.json
 	#
 	# test (4) ldap sasl, basic and selfsigned tls over smtps, subm w ldap lookup
 	#
-	# send: curl smtps://clt -> clt smtps://srv:587 -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
+	# send: curl smtps://clt -> clt smtps://srv:587 -> srv dovecot mbox
+	# recv: imaps://srv/inbox
 	#
 	#
-	docker run -d $(SRV_ENV) $(ADAL_ENV) $(TLS_ENV) \
+	docker run -d $(SRV_ENV) $(ADAL_ENV) $(TLS_ENV) $(DOVE_ENV) \
 		$(TST_REPO):$(call _ver,$(TST_VER),base)
 	docker run -d $(CLT_ENV) $(ADAU_ENV) -e SMTPD_USE_TLS=yes \
 		-e SMTP_RELAY_HOSTAUTH="[$(SRV_NAME)]:587 $(AD_MX_CN):$(AD_MX_PW)" \
@@ -294,8 +309,8 @@ test-up_5: test-up-net acme/acme.json
 	#
 	# test (5) passwd-file sasl and acme tls over subm
 	#
-	# send: curl smtp://clt -> clt smtps://srv:587 -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
+	# send: curl smtp://clt -> clt smtps://srv:587 -> srv postfix mbox:$(AD_USR_BX)
+	# recv: cat srv mbox:$(AD_USR_BX)
 	#
 	#
 	docker run -d $(SRV_ENV) $(ACME_ENV) \
@@ -313,8 +328,8 @@ test-up_6: test-up-net
 	#
 	# test (6) basic milter function and selfsigned tls
 	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
+	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox:$(AD_USR_BX)
+	# recv: cat srv mbox:$(AD_USR_BX)
 	#
 	#
 	docker run -d $(SRV_ENV) \
@@ -330,8 +345,8 @@ test-up_7: test-down-vol test-up-net
 	#
 	# test (7) dkim and multiple domains
 	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
+	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox:$(EX_USR_BX)
+	# recv: cat srv mbox:$(EX_USR_BX)
 	#
 	#
 	docker run -d $(SRV_ENV) $(SRVV_ENV) \
@@ -348,8 +363,8 @@ test-up_8: test-up-net test_7
 	#
 	# test (8) persistent /srv no env given
 	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
+	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox:$(EX_USR_BX)
+	# recv: cat srv mbox:$(EX_USR_BX)
 	#
 	#
 	docker run -d $(SRV_ENV) $(SRVV_ENV) \
@@ -363,8 +378,8 @@ test-up_9: test-up-net test_8
 	#
 	# test (9) persistent /srv FORCE_CONFIG
 	#
-	# send: curl smtp://clt -> clt smtp://srv -> srv var/mail/<mbox>
-	# recv: cat /var/mail/<mbox>
+	# send: curl smtp://clt -> clt smtp://srv -> srv postfix mbox:$(EX_USR_BX)
+	# recv: cat srv mbox:$(EX_USR_BX)
 	#
 	#
 	docker run -d $(SRV_ENV) $(SRVV_ENV) -e FORCE_CONFIG=true \
@@ -386,13 +401,13 @@ test-mail_%: test-mail-send_% test-waits_% test-mail-read_%
 	#
 
 test-logs_%:
-	docker container logs $(SRV_NAME) #| grep 'docker-entrypoint.sh' || true
+	docker container logs $(SRV_NAME)
 
 test-waits_%:
-	case $* in [1-5]) sleep $(TST_W8S1);; *) sleep $(TST_W8S2);; esac
+	case $* in [0-5]) sleep $(TST_W8S1);; *) sleep $(TST_W8S2);; esac
 
 test-waitl_%:
-	case $* in [1-5]) sleep $(TST_W8L1);; *) sleep $(TST_W8L2);; esac
+	case $* in [0-5]) sleep $(TST_W8L1);; *) sleep $(TST_W8L2);; esac
 
 test-up-net:
 	docker network create $(NET_NAME) 2>/dev/null || true
@@ -421,20 +436,24 @@ test-up-db_%:
 
 
 test-conf_%:
-	$(eval tst_dom := $(shell if [ $* -ge 7 ]; then echo $(EX_DOM); else echo $(AD_DOM); fi ))
-	$(eval tst_spro := $(shell if [ $* -eq 4 ]; then echo smtps; else echo smtp; fi ))
+	${eval tst_ad := ${shell case $* in \
+	1) echo $(AD_USR_AL);; [7-9]) echo $(EX_USR_AD);; *) echo $(AD_USR_AD);; esac}}
+	${eval tst_bx := ${shell case $* in \
+	2) echo $(AD_USR_AD);; [7-9]) echo $(EX_USR_BX);; *) echo $(AD_USR_BX);; esac}}
+	${eval tst_spro := ${shell case $* in 4) echo smtps;; *) echo smtp;; esac}}
+	${eval tst_str := ${shell case $* in 7) echo DKIM-Signature;; *) echo $(MAIL_SUB)$*;; esac}}
 
 test-mail-send_%: test-conf_%
-	@printf "From: <$(EX_USR_CN)@$(AD_DOM)>\nTo: <$(AD_USR_CN)@$(tst_dom)>\nDate: $$(date)\nSubject:$(MAIL_SUB)$*\n$(MAIL_MSG)$*\n" \
-	| tee /dev/tty | docker run $(CURL_ENV) $(CURL_IMG) -s -T - \
-	--mail-from $(EX_USR_CN)@$(AD_DOM) --mail-rcpt $(AD_USR_CN)@$(tst_dom) \
+	printf "From: <$(AD_SND_AD)>\nTo: <$(tst_ad)>\nDate: $$(date -R)\nSubject:$(MAIL_SUB)$*\n$(MAIL_MSG)$*\n" \
+	| tee /dev/tty | docker run $(CURL_ENV) $(CURL_IMG) $(CURL_OPT) -T - \
+	--mail-from $(AD_SND_AD) --mail-rcpt $(tst_ad) \
 	--url $(tst_spro)://$(CLT_NAME) -u $(AD_USR_CN):$(AD_USR_PW) --ssl --anyauth -k
 
-test-mail-read_%:
-	$(eval tst_str := $(shell if [ $* -eq 7 ]; then echo DKIM-Signature; else echo ^$(MAIL_MSG)$*; fi ))
-	$(eval tst_dom := $(shell if [ $* -ge 7 ]; then echo $(EX_DOM); else echo $(AD_DOM); fi ))
-	docker exec -it $(SRV_NAME) cat /var/mail/$(AD_USR_CN)@$(tst_dom) | grep $(tst_str)
+test-mail-read_%: test-conf_% all-test_quiet
+	case $* in [3-4]) ${MAKE} srv-imap;; *) ${MAKE} test-mail-cat_$*;; esac | grep $(tst_str)
 
+test-mail-cat_%: test-conf_%
+	docker exec -it $(SRV_NAME) cat /var/mail/$(tst_bx)
 
 $(addprefix test-,diff env htop imap logs pop3 sh sv):
 	${MAKE} $(patsubst test-%,srv-%,$@)
@@ -462,18 +481,21 @@ $(addsuffix -htop,$(CNT_LIST)):
 $(addsuffix -imap,$(MTA_LIST)):
 	docker run $(CURL_ENV) $(CURL_IMG) $(CURL_OPT) \
 	imap://$(patsubst %-imap,$(TST_NAME)-%,$@)/inbox \
-	-X "fetch 1 all" --ssl --anyauth -k -u $(AD_USR_CN):$(AD_USR_PW) #| grep $(GREP_ENV) $(MAIL_SUB)
+	-X "fetch * all" --ssl --anyauth -k -u $(AD_USR_CN):$(AD_USR_PW)
 
 $(addsuffix -pop3,$(MTA_LIST)):
 	docker run $(CURL_ENV) $(CURL_IMG) $(CURL_OPT) \
-	imap://$(patsubst %-pop3,$(TST_NAME)-%,$@)/1 \
-	--ssl --anyauth -k -u $(AD_USR_CN):$(AD_USR_PW) #| grep $(GREP_ENV) $(MAIL_SUB)
+	pop3://$(patsubst %-pop3,$(TST_NAME)-%,$@)/1 \
+	--ssl --anyauth -k -u $(AD_USR_CN):$(AD_USR_PW)
 
 $(addsuffix -sv,$(MTA_LIST)):
 	docker exec -it $(patsubst %-sv,$(TST_NAME)-%,$@) sh -c 'sv status $$SVDIR/*'
 
 $(addsuffix -userdb,$(MTA_LIST)):
-	docker exec -it $(patsubst %-userdb,$(TST_NAME)-%,$@) doveadm user $(EX_USR_CN)
+	docker exec -it $(patsubst %-userdb,$(TST_NAME)-%,$@) doveadm user $(AD_USR_CN)
+
+$(addsuffix -doveconf,$(MTA_LIST)):
+	docker exec -it $(patsubst %-doveconf,$(TST_NAME)-%,$@) doveconf -NP
 
 $(addsuffix -regen-edh,$(MTA_LIST)):
 	docker exec -it $(patsubst %-regen-edh,$(TST_NAME)-%,$@) conf update_postfix_dhparam
@@ -493,8 +515,12 @@ $(addsuffix -bayes-status,$(MTA_LIST)):
 auth-test:
 	docker exec $(AUT_NAME) ldapsearch
 
-db-test:
+db-table:
 	echo "select * from $(SQL_TAB)" | \
+	docker exec -i $(DB_NAME) mysql -t -u$(SQL_BD_CN) -p$(SQL_BD_PW) $(SQL_DB)
+
+db-auth:
+	echo "select password, userid as user from $(SQL_TAB) where userid = \"$(AD_MX_CN)\"" | \
 	docker exec -i $(DB_NAME) mysql -t -u$(SQL_BD_CN) -p$(SQL_BD_PW) $(SQL_DB)
 
 $(addprefix test-tls_,25 465 587):
@@ -512,8 +538,11 @@ test-tls_%:
 #	docker cp /tmp/bayesian.database.bak $(SRV_NAME):/tmp/.
 #	docker exec -it $(SRV_NAME) sh -c 'sa-learn --restore /tmp/bayesian.database.bak && chown -R amavis: /var/amavis/.spamassassin && rm -rf /tmp/bayesian.database.bak'
 
+all-test_quiet:
+	$(eval CURL_OPT := -s -S )
+
 acme-destroy: ssl-destroy
 	rm -f acme/*
 
 acme/acme.json: $(SRV_CERT)
-	bin/gen-acme-json.sh $(AD_USR_CN)@$(AD_DOM) $(SRV_FQDN) $(SRV_KEY) $(SRV_CERT) > $@
+	bin/gen-acme-json.sh $(AD_USR_AD) $(SRV_FQDN) $(SRV_KEY) $(SRV_CERT) > $@

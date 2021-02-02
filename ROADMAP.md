@@ -48,7 +48,7 @@ mysql> CREATE USER 'amavis_storage'@'localhost' IDENTIFIED BY 'xxxx';
 mysql> GRANT ALL PRIVILEGES ON amavis_storage.* TO 'amavis_storage'@'localhost';
 mysql> FLUSH PRIVILEGES;
 ```
-Load the initial schema from Amavis docs (usually located in /usr/share/doc/amavisd-new/ ).
+Load the initial [schema](https://www.amavis.org/README.sql-mysql.txt) from Amavis docs (usually located in /usr/share/doc/amavisd-new/ ).
 
 Delete unnecessary tables, as we will be using this database only for mail storage and not for lookups :
 ```bash

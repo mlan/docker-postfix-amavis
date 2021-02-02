@@ -18,12 +18,13 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 - [SMTP client authentication](#incoming-smtps-and-submission-client-authentication) on the SMTPS (port 465) and submission (port 587) using [Dovecot](https://www.dovecot.org/)
 - Hooks for integrating [Let’s Encrypt](#lets-encrypt-lts-certificates-using-traefik) LTS certificates using the reverse proxy [Traefik](https://docs.traefik.io/)
 - Consolidated configuration and run data under `/srv` to facilitate [persistent storage](#persistent-storage)
-- Simplified configuration of [table](#table-mailbox-lookup) mailbox lookup using environment variables
-- Simplified configuration of [LDAP](#ldap-mailbox-lookup) mailbox and alias lookup using environment variables
-- Simplified configuration of [MySQL](#mysql-mailbox-lookup) mailbox and alias lookup using environment variables
+- Simplified configuration of [passwd file](#table-mailbox-lookup) authentication, mailbox lookup using environment variables
+- Simplified configuration of [LDAP](#ldap-mailbox-lookup) authentication, mailbox and alias lookup using environment variables
+- Simplified configuration of [MySQL](#mysql-mailbox-lookup) authentication, mailbox and alias lookup using environment variables
+- Simplified configuration of [remote IMAP](#imap-sasl-client-authentication-smtpd_sasl_imaphost) authentication using environment variables
 - Simplified configuration of [SMTP relay](#outgoing-smtp-relay) using environment variables
 - Simplified configuration of [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail) keys using environment variables
-- Simplified configuration of secure SMTP, IMAP and POP3 [TLS](#incoming-tls-support) using environment variables
+- Simplified configuration of secure SMTP, [IMAP](#mail-delivery-imap-imaps-pop3-and-pop3s) and [POP3](#mail-delivery-imap-imaps-pop3-and-pop3s) [TLS](#incoming-tls-support) using environment variables
 - Simplified generation of Diffie-Hellman parameters needed for [EDH](https://en.wikipedia.org/wiki/Diffie–Hellman_key_exchange) using utility script
 - [Kopano-spamd](#kopano-spamd-integration-with-mlankopano) integration with [mlan/kopano](https://github.com/mlan/docker-kopano)
 - Multi-staged build providing the images `mini`, `base` and `full`
@@ -235,13 +236,19 @@ In the rare event that want to modify the configuration of an existing container
 
 When you create the `mlan/postfix-amavis` container, you can configure the services by passing one or more environment variables or arguments on the docker run command line. Once the services has been configured a lock file is created, to avoid repeating the configuration procedure when the container is restated.
 
-To see all available postfix configuration variables you can run `postconf` within the container, for example like this:
+To see all available Postfix configuration variables you can run `postconf` within the container, for example like this:
 
 ```bash
-docker exec -it mta postconf
+docker-compose exec mta postconf
 ```
 
 If you do, you will notice that configuration variable names are all lower case, but they will be matched with all uppercase environment variables by the container initialization scripts.
+
+Similarly Dovecot configuration variables can be set. One difference is that, to avoid name clashes, the variables are prefixed by `DOVECOT_PREFIX=DOVECOT_`. You can list all Dovecot variables by typing:
+
+```sh
+docker-compose exec mta doveconf
+```
 
 ## Outgoing SMTP relay
 
@@ -263,9 +270,9 @@ To configure the Postfix SMTP client connecting using the legacy SMTPS protocol 
 
 Postfix achieves client authentication using SASL provided by [Dovecot](https://dovecot.org/). Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the [`SMTP_RELAY_HOSTAUTH`](#smtp_relay_hostauth). Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587.
 
-To avoid the risk of being an open relay the SMTPS and submission ([MSA](https://en.wikipedia.org/wiki/Message_submission_agent)) services are only activated when at least one SASL method has activated. Three methods are supported; LDAP, IMAP and password file. Any combination of methods can simultaneously be active. If more than one method is active, authentication is attempted in the following order; password file, LDAP and finally IMAP.
+To avoid the risk of being an open relay the SMTPS and submission ([MSA](https://en.wikipedia.org/wiki/Message_submission_agent)) services are only activated when at least one SASL method has activated. Four methods are supported; LDAP, MySQL, IMAP and password file. Any combination of methods can simultaneously be active. If more than one method is active, all authentication methods are attempted one after another.
 
-A method is activated when its required variables has been defined. For LDAP, `LDAP_QUERY_ATTRS_PASS` is needed in addition to the LDAP variables discussed in [LDAP mailbox lookup](#ldap-mailbox-lookup). IMAP needs the `SMTPD_SASL_IMAPHOST` variable and password file require `SMTPD_SASL_CLIENTAUTH`.
+A method is activated when its required variables has been defined. For LDAP, `LDAP_QUERY_ATTRS_PASS` is needed in addition to the LDAP variables discussed in [LDAP mailbox lookup](#ldap-mailbox-lookup). MySQL needs `MYSQL_QUERY_PASS` in addition to the MySQL variables discussed in [MySQL mailbox lookup](#mysql-mailbox-lookup). And IMAP needs the [`SMTPD_SASL_IMAPHOST`](#imap-sasl-client-authentication-smtpd_sasl_imaphost) variable and password file require [`SMTPD_SASL_CLIENTAUTH`](#password-file-sasl-client-authentication-smtpd_sasl_clientauth).
 
 Additionally clients are required to authenticate using TLS to avoid password being sent in the clear. The configuration of the services are the similar with the exception that the SMTPS service uses the legacy SMTPS protocol; `SMTPD_TLS_WRAPPERMODE=yes`, whereas the submission service uses the STARTTLS protocol.
 
@@ -462,17 +469,29 @@ If you wish to create a new private key you can run:
 docker exec -it <container_name> amavisd genrsa /var/db/dkim/$MAIL_DOMAIN.$DKIM_SELECTOR.privkey.pem $DKIM_KEYBITS
 ```
 
+## Mailbox maps and authentication
+
+When Postfix receives an message it uses mailbox maps to lookup the recipient's mailbox-path/username. If successful the message is accepted. Whether what the lookup returns is used as a mailbox-path or a username depends on if the messages will be delivered to a local mailbox or is transported for delivery elsewhere. See [delivery transport and mail boxes](#delivery-transport-and-mail-boxes) for an overview on delivery methods.
+
+So one can imagine situations where Postfix is set up to lookup and pass on a username that is different from what dovecot is expecting when performing authentication. Using `DOVECOT_AUTH_USERNAME_FORMAT=%Ln` Dovecot can be made to drop the domain part, if present, from the supplied username, see [Dovecot core settings](https://doc.dovecot.org/settings/core/?highlight=auth_username_format) for details.
+
 ## Table mailbox lookup
 
-Postfix can use a table as a source for any of its lookups including virtual mailbox and aliases. The `mlan/postfix-amavis` image provides a simple way to generate virtual mailbox lookup using the `MAIL_BOXES` environment variable.
+Postfix can use a table as a source for any of its lookups including virtual mailbox and aliases. The `mlan/postfix-amavis` image provides a simple way to generate virtual mailbox lookup using the `MAIL_BOXES` and `MAIL_ALIASES` environment variables.
 
 #### `MAIL_BOXES`
 
-Using the `MAIL_BOXES` environment variable you simply provide a space separated list with all email addresses that Postfix should accept incoming mail to. For example: `MAIL_BOXES="info@example.com abuse@example.com"`. The default value is empty.
+The `MAIL_BOXES` environment variable (empty by default) hold a space separated list of addresses and their mailboxes using the following syntax: `MAIL_BOXES="address address:mailbox"`. The mailbox will have the same name as the address if it is not explicitly given.
+
+Using the `MAIL_BOXES` environment variable you simply provide a space separated list with all email addresses that Postfix should accept incoming mail to. For example: `MAIL_BOXES="receiver@example.com info@example.com"`.
+
+The mailbox path is separated from the address by a colon `:`, like so; `MAIL_BOXES="receiver@example.com:receiver/inbox info@example.com:example.com/info/"`.
+
+Mail is stored either in [mbox or maildir format](https://wiki1.dovecot.org/MailboxFormat). The mbox format is used unless the mailbox path ends with `/` in which case maildir format is used.
 
 #### `MAIL_ALIASES`
 
-Using the `MAIL_ALIASES` environment variable you simply provide a space separated list with email alias addresses that Postfix should accept incoming mail to, using the following syntax: `MAIL_ALIASES="alias1:target1a,target1b alias2:target2"`. For example: `MAIL_ALIASES="root:info,info@example.com postmaster:root"`. The default value is empty.
+Using the `MAIL_ALIASES` environment variable you simply provide a space separated list with email alias addresses that Postfix should accept incoming mail to, using the following syntax: `MAIL_ALIASES="alias:address alias:address,address"`. For example: `MAIL_ALIASES="root:info,info@example.com postmaster:root"`. The default value is empty.
 
 ## LDAP mailbox lookup
 
@@ -498,6 +517,10 @@ This is the filter used to search the directory, where `%s` is a
 substitute for the address Postfix is trying to resolve. Example, only consider the email address of users who also have `objectclass=posixAccount`; `LDAP_QUERY_FILTER_USER=(&(objectclass=posixAccount)(mail=%s))`.
 
 ### Optional LDAP parameters
+
+#### `LDAP_QUERY_ATTRS_USER`
+
+As mentioned in [mailbox maps and authentication](#mailbox-maps-and-authentication) what the LDAP lookup returns can be used as a mailbox-path or a username depending on if the messages will be delivered to a local mailbox or is transported for delivery elsewhere. The default attribute to return is `LDAP_QUERY_ATTRS_USER=mail`. Use this variable if another attribute is to be returned.
 
 #### `LDAP_GROUP_BASE`
 
@@ -540,19 +563,19 @@ The `MYSQL_DATABASE`, is the database on which to conduct the searches for users
 
 The `MYSQL_QUERY_USER` query is used to lookup the recipient,
 where `%s` is a substitute for the address Postfix is trying to resolve.
-To exemplify, lets assume that the table `mailboxes` within the database `postfix` is structured like this:
+To exemplify, lets assume that the table `users` within the database `postfix` is structured like this:
 
 ```mysql
-+----+-----------+----------------------+
-| id | recipient | mail                 |
-+----+-----------+----------------------+
-|  1 | receiver  | receiver@example.com |
-|  2 | office1   | office1@example.com  |
-+----+-----------+----------------------+
++----+----------+---------------------------------------------+----------------------+
+| id | userid   | password                                    | mail                 |
++----+----------+---------------------------------------------+----------------------+
+|  1 | receiver | {PLAIN-MD5}5ebe2294ecd0e0f08eab7690d2a6ee69 | receiver@example.com |
+|  2 | office1  | {PLAIN-MD5}7c6a180b36896a0a8c02787eeafb0e4c | NULL                 |
++----+----------+---------------------------------------------+----------------------+
 ```
 
 We can use the following query to find the recipient that matches the mail address being resolved:
-`MYSQL_QUERY_USER="select recipient from mailboxes where mail='%s' limit 1;"`.
+`MYSQL_QUERY_USER="select mail from users where mail='%s' limit 1;"`.
 
 ### Optional MySQL parameters
 
@@ -565,6 +588,10 @@ substitute for the address Postfix is trying to resolve.
 
 Use `MYSQL_USER` and `MYSQL_PASSWORD` to provide authentication credentials for MySQL queries.
 Example: `MYSQL_USER=admin`, `MYSQL_PASSWORD=secret`. These environment variables are empty by fault.
+
+#### `MYSQL_QUERY_PASS`
+
+As mentioned in [incoming SMTPS and submission client authentication](#incoming-smtps-and-submission-client-authentication) Dovecot needs the `MYSQL_QUERY_PASS` to be defined to be able to lookup the user and password when performing authentication. The following would work with the `users` table shown above `MYSQL_QUERY_PASS="select password, userid as user from $(SQL_TAB) where userid = '%u'"`. See [Dovecot MySQL authentication](https://doc.dovecot.org/configuration_manual/authentication/sql/#mysql) for details.
 
 ## Rewrite recipient email address `REGEX_ALIAS`
 
@@ -580,21 +607,23 @@ The `mlan/postfix-amavis` image is designed primarily to work with companion sof
 
 The environment variable `VIRTUAL_TRANSPORT` specifies how messages will be transported for final delivery. Frequently the server taking final delivery listen to LMTP. Assuming it does so on port 2003 it is sufficient to set `VIRTUAL_TRANSPORT=lmtp:app:2003` to arrange the transport.
 
-If `VIRTUAL_TRANSPORT` is not defined local mail boxes will be managed by Postfix directly. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/user@example.com`.
+If `VIRTUAL_TRANSPORT` is not defined local mail boxes will be managed by Postfix directly. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/user@example.com`. See [`MAIL_BOXES`](#mail-boxes) for details on mailbox paths.
 
-The `mlan/postfix-amavis` image include the [Dovecot, a secure IMAP server](https://dovecot.org/), which can also manage mail boxes. Setting `VIRTUAL_TRANSPORT=lmtp:unix:private/transport` will transport messages to dovecot which will arrange local mail boxes. Since Dovecot serves both IMAP and POP3 these mailboxes can be accessed by remote mail clients if desired.
+The `mlan/postfix-amavis` image include the [Dovecot, a secure IMAP server](https://dovecot.org/), which can also manage mail boxes. Setting `VIRTUAL_TRANSPORT=lmtp:unix:private/transport` will transport messages to dovecot which will arrange local mailboxes. The environment variable `DOVECOT_MAIL_LOCATION` can be used to set the [mailbox location template](https://doc.dovecot.org/configuration_manual/mail_location/). Since Dovecot serves both IMAP and POP3 these mailboxes can be accessed by remote mail clients if desired.
 
 The table below is provided to give an overview of the options discussed here.
 
 | `VIRTUAL_TRANSPORT`            | Final delivery                                               |
 | ------------------------------ | ------------------------------------------------------------ |
-| `=`                            | Postfix local mail box `/var/mail/user@example.com`          |
+| `=`                            | Postfix local mailbox `/var/mail/user@example.com`           |
 | `=lmtp:app:2003`               | External LMTP host `app` take delivery                       |
-| `=lmtp:unix:private/transport` | Dovecot local mail box `/var/mail/user/inbox`, with IMAP and POP3 access |
+| `=lmtp:unix:private/transport` | Dovecot local mailbox `/var/mail/user/inbox`, with IMAP and POP3 access |
 
 ## Mail delivery, IMAP, IMAPS, POP3 and POP3S
 
 When [Dovecot](https://dovecot.org/) manages the mail boxes, see [`VIRTUAL_TRANSPORT`](#virtual-transport), mail clients can retrieve messages using both the [IMAP](https://www.atmail.com/blog/imap-commands/) and POP3 protocols. Dovecot will use TLS certificates that have been made available to Postfix, in which case IMAPS and POP3S connections will be possible, see [Incoming TLS support](#incoming-tls-support).
+
+By default Dovecot refuses plain text authentication unless within a secure TLS connection. Sometimes, perhaps for testing, you want to enable plain text authentication for non-secure IMAP or POP3 connections. if so set `DOVECOT_DISABLE_PLAINTEXT_AUTH=no`.
 
 ## Message size limit `MESSAGE_SIZE_LIMIT`
 

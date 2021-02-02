@@ -10,7 +10,7 @@ SSL_MAIL  = auto
 SSL_PASS  = $(AD_USR_PW)
 #SSL_TRST  = $(SSL_SMIME)
 
-CURL_DBG ?= -v -s
+CURL_OPT ?= -v -s
 
 variables:
 	make -pn | grep -A1 "^# makefile"| grep -v "^#\|^--" | sort | uniq
@@ -222,28 +222,28 @@ mta-bayes:
 mta-test_smtp:
 	printf "From: A tester <test@example.biz>\nTo: <$(AD_USR_CN)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message\n\nGreat news! You can receive email.\n" \
 	| curl smtp://localhost -T - --mail-from test@example.biz \
-	--mail-rcpt $(AD_USR_CN)@$(MAIL_DOMAIN) $(CURL_DBG)
+	--mail-rcpt $(AD_USR_CN)@$(MAIL_DOMAIN) $(CURL_OPT)
 
 mta-test_smtps:
 	printf "From: A tester <test@example.biz>\nTo: <$(AD_USR_CN)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTPS test message\n\nGreat news! You can receive secure email.\n" \
 	| curl smtps://localhost -T - --mail-from test@example.biz -k \
 	-u $(AD_USR_CN):$(AD_USR_PW) \
-	--mail-rcpt $(AD_USR_CN)@$(MAIL_DOMAIN) $(CURL_DBG)
+	--mail-rcpt $(AD_USR_CN)@$(MAIL_DOMAIN) $(CURL_OPT)
 
 mta-test_smtp2:
 	printf "From: A info tester <test-info@example.biz>\nTo: <$(AD_USR_CN)-info@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message \n\nGreat news! $(AD_USR_CN)-info@$(MAIL_DOMAIN) can also receive email.\n" \
 	| curl smtp://localhost -T - --mail-from test@example.biz \
-	--mail-rcpt $(AD_USR_CN)@$(MAIL_DOMAIN) $(CURL_DBG)
+	--mail-rcpt $(AD_USR_CN)@$(MAIL_DOMAIN) $(CURL_OPT)
 
 mta-test_shared: all-test_quiet
 	printf "From: A tester <test@example.biz>\nTo: <$(AD_SHR_CN)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message\n\nGreat news! A shared store can receive email.\n" \
 	| curl smtp://localhost -T - --mail-from test@example.biz \
-	--mail-rcpt $(AD_SHR_CN)@$(MAIL_DOMAIN) $(CURL_DBG)
+	--mail-rcpt $(AD_SHR_CN)@$(MAIL_DOMAIN) $(CURL_OPT)
 
 mta-test_public: all-test_quiet
 	printf "From: A tester <test@example.biz>\nTo: <$(AD_PUB_CN)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message\n\nGreat news! A public store can receive email.\n" \
 	| curl smtp://localhost -T - --mail-from test@example.biz \
-	--mail-rcpt $(AD_PUB_CN)@$(MAIL_DOMAIN) $(CURL_DBG)
+	--mail-rcpt $(AD_PUB_CN)@$(MAIL_DOMAIN) $(CURL_OPT)
 
 mta-razor:
 	docker-compose exec mta run amavis_register_razor
@@ -327,22 +327,22 @@ app-test_lmtp: app-hostaddr
 app-test_all: all-test_muted app-test_imap app-test_pop3 app-test_ical app-test_imaps app-test_pop3s app-test_icals
 
 app-test_imap: app-hostaddr
-	curl imap://$(myhost) -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_DBG)
+	curl imap://$(myhost) -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_OPT)
 
 app-test_imaps: app-hostaddr
-	curl imaps://$(myhost) -k -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_DBG)
+	curl imaps://$(myhost) -k -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_OPT)
 
 app-test_pop3: app-hostaddr
-	curl pop3://$(myhost) -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_DBG)
+	curl pop3://$(myhost) -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_OPT)
 
 app-test_pop3s: app-hostaddr
-	curl pop3s://$(myhost) -k -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_DBG)
+	curl pop3s://$(myhost) -k -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_OPT)
 
 app-test_ical: app-hostaddr
-	curl http://$(myhost):8080 -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_DBG)
+	curl http://$(myhost):8080 -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_OPT)
 
 app-test_icals: app-hostaddr
-	curl https://$(myhost):8443 -k -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_DBG)
+	curl https://$(myhost):8443 -k -u $(AD_USR_CN):$(AD_USR_PW) $(CURL_OPT)
 
 app-test_tls: app-hostaddr
 	docker run --rm -it --network demo_backend drwetter/testssl.sh app:993 || true
@@ -380,10 +380,10 @@ app-create_smime: all-create_smime
 	docker-compose exec app update-ca-certificates
 
 all-test_quiet:
-	$(eval CURL_DBG := -s -S )
+	$(eval CURL_OPT := -s -S )
 
 all-test_muted:
-	$(eval CURL_DBG := -s -S >/dev/null || true)
+	$(eval CURL_OPT := -s -S >/dev/null || true)
 
 all-create_smime: ssl/$(AD_USR_CN).p12
 

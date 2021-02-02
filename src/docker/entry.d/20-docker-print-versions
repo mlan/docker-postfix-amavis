@@ -1,5 +1,5 @@
 #!/bin/sh
 #
-# 10-docker-print-versions
+# 20-docker-print-versions
 #
 dc_pkg_versions postfix dovecot amavis spamassassin clamav

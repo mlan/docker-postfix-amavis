@@ -5,9 +5,11 @@
 # Define variables and functions used during container initialization.
 #
 # Defined in Dockerfile:
-# DOCKER_IMAP_DIR DOCKER_IMAP_PASSDB_FILE
+# DOCKER_IMAP_DIR DOCKER_IMAPDIST_DIR DOCKER_IMAP_PASSDB_FILE
 #
+DOVECOT_CF=${DOVECOT_CF-$DOCKER_IMAP_DIR/dovecot.conf}
 DOVECOT_CD=${DOVECOT_CD-$DOCKER_IMAP_DIR/conf.d}
+DOVECOT_PREFIX=${DOVECOT_PREFIX-DOVECOT_}
 
 #
 # Setup dovecot sasl auth for smtps and submission.
@@ -15,12 +17,16 @@ DOVECOT_CD=${DOVECOT_CD-$DOCKER_IMAP_DIR/conf.d}
 dovecot_setup_postfix() {
 	# dovecot need to be installed
 	if dc_is_installed dovecot; then
-		dovecot_setup_passdb_file
-		dovecot_setup_passdb_imap
-		dovecot_setup_passdb_ldap
-		if [ -n "$setup_passdb" ]; then
+		dovecot_setup_conf
+		dovecot_setup_master
+		dovecot_setup_auth_file
+		dovecot_setup_auth_imap
+		dovecot_setup_auth_ldap
+		dovecot_setup_auth_mysql
+		if [ -n "$setup_auth" ]; then
 			dovecot_setup_smtpd_sasl
 		fi
+		dovecot_apply_envvars
 	fi
 }
 
@@ -28,9 +34,10 @@ dovecot_setup_postfix() {
 # Configure postfix sasl auth to use dovecot.
 #
 dovecot_setup_smtpd_sasl() {
-#	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	dc_log 5 "[postfix] Enabling secure smtps and subm with client SASL auth-dovecot."
+	#
 	# enable sasl auth on the submission port
+	#
 	postconf -M "submission/inet=submission inet n - n - - smtpd"
 	postconf -P "submission/inet/syslog_name=postfix/submission"
 	postconf -P "submission/inet/smtpd_sasl_auth_enable=yes"
@@ -41,7 +48,9 @@ dovecot_setup_smtpd_sasl() {
 	postconf -P "submission/inet/smtpd_tls_auth_only=yes"
 	postconf -P "submission/inet/smtpd_reject_unlisted_recipient=no"
 	postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
+	#
 	# enable sasl auth on the smtps port
+	#
 	postconf -M "smtps/inet=smtps inet n - n - - smtpd"
 	postconf -P "smtps/inet/syslog_name=postfix/smtps"
 	postconf -P "smtps/inet/smtpd_sasl_auth_enable=yes"
@@ -60,14 +69,57 @@ dovecot_setup_smtpd_sasl() {
 }
 
 #
+# Configure dovecot local config.
+#
+dovecot_setup_conf() {
+	rm -rf $DOCKER_IMAP_DIR/*
+	mkdir -p $DOVECOT_CD
+	cat <<-!cat > $DOVECOT_CF
+		!include conf.d/*.conf
+	!cat
+	cat <<-!cat > $DOCKER_IMAP_DIR/README
+		You can find dovecot example config files here: $DOCKER_IMAPDIST_DIR
+	!cat
+}
+
+#
+# Configure dovecot auth service.
+# postconf virtual_transport=lmtp:unix:private/transport
+# https://doc.dovecot.org/settings/core/
+#
+dovecot_setup_master() {
+	cat <<-!cat > $DOVECOT_CD/10-master.conf
+		protocols = imap lmtp pop3
+		mail_location = mbox:/var/mail/%Lu
+		first_valid_uid = 1
+		mail_uid = $DOCKER_APPL_RUNAS
+		mail_gid = $DOCKER_APPL_RUNAS
+		service auth {
+		unix_listener /var/spool/postfix/private/auth {
+		mode  = 0660
+		user  = $DOCKER_APPL_RUNAS
+		group = $DOCKER_APPL_RUNAS
+		}
+		}
+		service lmtp {
+		unix_listener /var/spool/postfix/private/transport {
+		mode  = 0660
+		user  = $DOCKER_APPL_RUNAS
+		group = $DOCKER_APPL_RUNAS
+		}
+		}
+	!cat
+}
+
+#
 # Configure dovecot to use passwd-file
 #
-dovecot_setup_passdb_file() {
+dovecot_setup_auth_file() {
 	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	if [ -n "$clientauth" ]; then
-		setup_passdb=file
+		setup_auth=file
 		dc_log 5 "[dovecot] Setup authentication with passdb-file."
-		cat <<-!cat > $DOVECOT_CD/22-passdb-file.conf
+		cat <<-!cat > $DOVECOT_CD/10-auth-file.conf
 			passdb {
 			driver = passwd-file
 			args = $DOCKER_IMAP_PASSDB_FILE
@@ -83,12 +135,12 @@ dovecot_setup_passdb_file() {
 #
 # Configure dovecot to use remote imap server.
 #
-dovecot_setup_passdb_imap() {
+dovecot_setup_auth_imap() {
 	local imaphost=${1-$SMTPD_SASL_IMAPHOST}
 	if [ -n "$imaphost" ]; then
-		setup_passdb=imap
+		setup_auth=imap
 		dc_log 5 "[dovecot] Setup authentication with remote-imap-host: $imaphost."
-		cat <<-!cat > $DOVECOT_CD/21-passdb-imap.conf
+		cat <<-!cat > $DOVECOT_CD/10-auth-imap.conf
 			passdb {
 			driver = imap
 			args = host=$imaphost
@@ -105,14 +157,14 @@ dovecot_setup_passdb_imap() {
 # Try to reuse LDAP_QUERY_FILTER_USER which might contain (mail=%s). If so
 # replace is with (<user>=%u) where <user> is taken from LDAP_QUERY_ATTRS_PASS.
 #
-dovecot_setup_passdb_ldap() {
+dovecot_setup_auth_ldap() {
 	local pass_filter_1=${LDAP_QUERY_ATTRS_PASS/=user*/}
 	local pass_filter_2=${LDAP_QUERY_FILTER_USER/mail=%s/$pass_filter_1=%u}
 	local pass_filter=${LDAP_QUERY_FILTER_PASS-$pass_filter_2}
-	local passdb_ldap_cf=$DOVECOT_CD/20-passdb-ldap.conf
-	local passdb_ldap_arg=$DOVECOT_CD/passdb-ldap.conf.ext
+	local passdb_ldap_cf=$DOVECOT_CD/10-auth-ldap.conf
+	local passdb_ldap_arg=$DOVECOT_CD/auth-args-ldap.conf.ext
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$pass_filter" ] && [ -n "$LDAP_QUERY_ATTRS_PASS" ]); then
-		setup_passdb=ldap
+		setup_auth=ldap
 		dc_log 5 "[dovecot] Setup authentication with ldap-host: $LDAP_HOST."
 		cat <<-!cat > $passdb_ldap_cf
 			passdb {
@@ -128,7 +180,36 @@ dovecot_setup_passdb_ldap() {
 			scope = subtree
 			pass_attrs = $LDAP_QUERY_ATTRS_PASS
 			pass_filter = $pass_filter
-			user_filter = $pass_filter
+		!cat
+	fi
+}
+
+#
+# Configure dovecot to use mysql.
+#
+dovecot_setup_auth_mysql() {
+	local passdb_mysql_cf=$DOVECOT_CD/10-auth-mysql.conf
+	local passdb_mysql_arg=$DOVECOT_CD/auth-args-mysql.conf.ext
+	if ([ -n "$MYSQL_HOST" ] && [ -n "$MYSQL_DATABASE" ] && [ -n "$MYSQL_QUERY_PASS" ]); then
+		setup_auth=mysql
+		dc_log 5 "[dovecot] Setup authentication with mysql-host: $MYSQL_HOST."
+		cat <<-!cat > $passdb_mysql_cf
+			passdb {
+			driver = sql
+			args = $passdb_mysql_arg
+			}
+		!cat
+		local passdb_mysql_con="host=$MYSQL_HOST dbname=$MYSQL_DATABASE"
+		if [ -n "$MYSQL_USER" ]; then
+			passdb_mysql_con="$passdb_mysql_con user=$MYSQL_USER"
+		fi
+		if [ -n "$MYSQL_PASSWORD" ]; then
+			passdb_mysql_con="$passdb_mysql_con password=$MYSQL_PASSWORD"
+		fi
+		cat <<-!cat > $passdb_mysql_arg
+			driver = mysql
+			connect = $passdb_mysql_con
+			password_query = $MYSQL_QUERY_PASS
 		!cat
 	fi
 }
@@ -151,6 +232,24 @@ dovecot_activate_tls_cert() {
 	fi
 }
 
+#
+# Apply envvars
+# Dovecot parameter names are prefixed with ${DOVECOT_PREFIX} to form envvars.
+# doveconf -m auth -m login | sed -rn 's/^([^ ]+) =.*/\1/p'
+#
+dovecot_apply_envvars() {
+	local env_vars="$(export -p | sed -nr 's/export '${DOVECOT_PREFIX}'([^=]+).*/\1/p')"
+	local lcase_var env_val
+	dc_log 7 "[dovecot] apply_envvars with prefix: ${DOVECOT_PREFIX}"
+	for env_var in $env_vars; do
+		lcase_var="$(echo $env_var | tr '[:upper:]' '[:lower:]')"
+		if [ -n "$(doveconf -h $lcase_var 2>/dev/null | tr '\n' '\')" ]; then
+			env_val="$(eval echo \$${DOVECOT_PREFIX}$env_var)"
+			dc_log 5 "[dovecot] Setting parameter: $lcase_var = $env_val"
+			echo "$lcase_var = $env_val" >> $DOVECOT_CD/50-envvars.conf
+		fi
+	done
+}
 
 #
 # Generate encrypted password.

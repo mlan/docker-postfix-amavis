@@ -4,4 +4,5 @@
 .gitattributes
 src/notused
 local
-demo/
+demo
+test

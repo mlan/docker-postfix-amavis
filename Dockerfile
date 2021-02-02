@@ -24,6 +24,7 @@ ENV	SVDIR=/etc/service \
 	DOCKER_SPAM_DIR=/etc/mail/spamassassin \
 	DOCKER_MAIL_LIB=/var/mail \
 	DOCKER_IMAP_DIR=/etc/dovecot \
+	DOCKER_IMAPDIST_DIR=/etc/dovecot.dist \
 	DOCKER_MILT_DIR=/etc/amavis \
 	DOCKER_MILT_LIB=/var/amavis \
 	DOCKER_DKIM_LIB=/var/db/dkim \
@@ -139,14 +140,16 @@ FROM	mini AS base
 RUN	apk --no-cache --update add \
 	dovecot \
 	dovecot-ldap \
+	dovecot-mysql \
 	dovecot-lmtpd \
+	dovecot-pop3d \
 	jq \
 	&& docker-service.sh "dovecot -F" \
 	&& rm -f /etc/ssl/dovecot/* \
+	&& mkdir -p $DOCKER_IMAPDIST_DIR \
+	&& mv -f $DOCKER_IMAP_DIR/* $DOCKER_IMAPDIST_DIR \
 	&& addgroup $DOCKER_APPL_RUNAS $DOCKER_IMAP_RUNAS \
-	&& addgroup $DOCKER_IMAP_RUNAS $DOCKER_APPL_RUNAS \
-	&& source dovecot-common.sh \
-	&& dc_dovecot_setup_docker
+	&& addgroup $DOCKER_IMAP_RUNAS $DOCKER_APPL_RUNAS
 
 #
 #

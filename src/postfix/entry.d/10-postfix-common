@@ -20,6 +20,7 @@ POSTFIX_LDAP_GROUPS_CF=${POSTFIX_LDAP_GROUPS_CF-$DOCKER_CONF_DIR/ldap-groups.cf}
 POSTFIX_LDAP_EXPAND_CF=${POSTFIX_LDAP_EXPAND_CF-$DOCKER_CONF_DIR/ldap-groups-expand.cf}
 POSTFIX_MYSQL_USERS_CF=${POSTFIX_MYSQL_USERS_CF-$DOCKER_CONF_DIR/mysql-users.cf}
 POSTFIX_MYSQL_ALIAS_CF=${POSTFIX_MYSQL_ALIAS_CF-$DOCKER_CONF_DIR/mysql-aliases.cf}
+LDAP_QUERY_ATTRS_USER=${LDAP_QUERY_ATTRS_USER-mail}
 
 #
 # Apply envvars
@@ -104,15 +105,38 @@ postfix_default_maps() {
 }
 
 #
+# Setup lmdb mailboxes
+# MAIL_BOXES="address address:mailbox"
+# We use virtual, so table format is: address mailbox
+# Postfix need help with creating path root
+#
+postfix_setup_mailbox_lmdb() {
+	local mboxmaps="${1-$MAIL_BOXES}"
+	if [ -n "$mboxmaps" ]; then
+		dc_log 5 "[postfix] Configuring virtual mailboxes."
+		for mboxmap in $mboxmaps; do
+			dc_cond_append $POSTFIX_VIRT_MAILBOX $(echo "$mboxmap" | sed '/:/!s/.*/& &/g;s/:/ /g')
+			for mboxbase in $(echo "$mboxmap" | sed '/:/!d;s/^.*://g;/\//!d;s/\/[^/]*\/*$//g'); do
+				mkdir -p ${DOCKER_MAIL_LIB}/${mboxbase}
+				chown -LR ${DOCKER_APPL_RUNAS}: ${DOCKER_MAIL_LIB}
+			done
+		done
+		postmap lmdb:$POSTFIX_VIRT_MAILBOX
+		postconf virtual_lmdb_mailbox_maps=lmdb:$POSTFIX_VIRT_MAILBOX
+	fi
+}
+
+#
 # Setup postfix aliases
-# MAIL_ALIASES="alias1:target1a,target1b alias2:target2"
+# MAIL_ALIASES="alias:address alias:address,address"
+# We use virtual, so table format is: alias address, address
 #
 postfix_setup_alias_lmdb() {
 	local aliasmaps="${1-$MAIL_ALIASES}"
 	if [ -n "$aliasmaps" ]; then
-		dc_log 5 "[postfix] Configuring mail aliases."
+		dc_log 5 "[postfix] Configuring virtual aliases."
 		for aliasmap in $aliasmaps; do
-			dc_cond_append $POSTFIX_VIRT_ALIASES $(echo "$aliasmap" | sed 's/[:,]/& /g')
+			dc_cond_append $POSTFIX_VIRT_ALIASES $(echo "$aliasmap" | sed 's/:/ /g;s/[,]/& /g')
 		done
 		postmap lmdb:$POSTFIX_VIRT_ALIASES
 		postconf virtual_lmdb_alias_maps=lmdb:$POSTFIX_VIRT_ALIASES
@@ -133,6 +157,7 @@ postfix_setup_alias_regex() {
 
 #
 # Setup SMTP auth
+# SMTP_RELAY_HOSTAUTH="[relay_fqdn]:587 user:password"
 #
 postfix_setup_smtp_auth() {
 	local hostauth=${1-$SMTP_RELAY_HOSTAUTH}
@@ -159,14 +184,14 @@ postfix_setup_smtp_auth() {
 postfix_setup_mailbox_ldap() {
 	if ([ -n "$LDAP_HOST" ] && [ -n "$LDAP_USER_BASE" ] && [ -n "$LDAP_QUERY_FILTER_USER" ]); then
 		dc_log 5 "[postfix] Configuring ldap lookup with ldap-host: $LDAP_HOST"
+		_postfix_generate_ldapmap "$LDAP_USER_BASE" "$LDAP_QUERY_ATTRS_USER" "$LDAP_QUERY_FILTER_USER" > $POSTFIX_LDAP_USERS_CF
 		postconf virtual_ldap_mailbox_maps=ldap:$POSTFIX_LDAP_USERS_CF
-		_postfix_generate_ldapmap "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_USER" > $POSTFIX_LDAP_USERS_CF
 		if [ -n "$LDAP_QUERY_FILTER_ALIAS" ]; then
-			_postfix_generate_ldapmap "$LDAP_USER_BASE" mail "$LDAP_QUERY_FILTER_ALIAS" > $POSTFIX_LDAP_ALIAS_CF
+			_postfix_generate_ldapmap "$LDAP_USER_BASE" "$LDAP_QUERY_ATTRS_USER" "$LDAP_QUERY_FILTER_ALIAS" > $POSTFIX_LDAP_ALIAS_CF
 			if [ -n "$LDAP_GROUP_BASE" -a -n "$LDAP_QUERY_FILTER_GROUP" -a -n "$LDAP_QUERY_FILTER_EXPAND" ]; then
-				postconf "virtual_ldap_alias_maps=ldap:$POSTFIX_LDAP_ALIAS_CF ldap:$POSTFIX_LDAP_GROUPS_CF ldap:$POSTFIX_LDAP_EXPAND_CF"
 				_postfix_generate_ldapmap "$LDAP_GROUP_BASE" memberUid "$LDAP_QUERY_FILTER_GROUP" > $POSTFIX_LDAP_GROUPS_CF
-				_postfix_generate_ldapmap "$LDAP_GROUP_BASE" mail "$LDAP_QUERY_FILTER_EXPAND" > $POSTFIX_LDAP_EXPAND_CF
+				_postfix_generate_ldapmap "$LDAP_GROUP_BASE" "$LDAP_QUERY_ATTRS_USER" "$LDAP_QUERY_FILTER_EXPAND" > $POSTFIX_LDAP_EXPAND_CF
+				postconf "virtual_ldap_alias_maps=ldap:$POSTFIX_LDAP_ALIAS_CF ldap:$POSTFIX_LDAP_GROUPS_CF ldap:$POSTFIX_LDAP_EXPAND_CF"
 			else
 				postconf "virtual_ldap_alias_maps=ldap:$POSTFIX_LDAP_ALIAS_CF"
 			fi
@@ -198,20 +223,6 @@ _postfix_generate_ldapmap() {
 	fi
 }
 
-#
-# Setup lmdb mailboxes
-#
-postfix_setup_mailbox_lmdb() {
-	local emails="${1-$MAIL_BOXES}"
-	if [ -n "$emails" ]; then
-		dc_log 5 "[postfix] Configuring virtual mailboxes."
-		for email in $emails; do
-			dc_cond_append $POSTFIX_VIRT_MAILBOX $email $email
-		done
-		postmap lmdb:$POSTFIX_VIRT_MAILBOX
-		postconf virtual_lmdb_mailbox_maps=lmdb:$POSTFIX_VIRT_MAILBOX
-	fi
-}
 
 #
 # Setup mysql mailboxes
