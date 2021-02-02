@@ -118,7 +118,7 @@ dovecot_setup_auth_file() {
 	local clientauth=${1-$SMTPD_SASL_CLIENTAUTH}
 	if [ -n "$clientauth" ]; then
 		setup_auth=file
-		dc_log 5 "[dovecot] Setup authentication with passdb-file."
+		dc_log 5 "[dovecot] Setup authentication with passwd-file."
 		cat <<-!cat > $DOVECOT_CD/10-auth-file.conf
 			passdb {
 			driver = passwd-file

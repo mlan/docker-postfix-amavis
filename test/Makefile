@@ -149,6 +149,7 @@ GREP_ENV ?=
 
 TST_W8S1 ?= 1
 TST_W8AU ?= 3
+TST_W8DB ?= 40
 TST_W8S2 ?= 80
 TST_W8L1 ?= 20
 TST_W8L2 ?= 120
@@ -431,7 +432,7 @@ test-up-auth_%:
 
 test-up-db_%:
 	docker run -d $(DB_ENV) $(DB_VOL) $(DB_IMG)
-	sleep $(TST_W8L1)
+	sleep $(TST_W8DB)
 	echo "$$SQL_ADD_DATA" | docker exec -i $(DB_NAME) mysql -u$(SQL_BD_CN) -p$(SQL_BD_PW) $(SQL_DB)
 
 
