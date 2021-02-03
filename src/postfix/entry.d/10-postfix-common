@@ -54,6 +54,8 @@ postfix_install_files() {
 	done
 }
 
+postfix_backup_file() { mv -f $1 $1.bak 2>/dev/null ;}
+
 #
 # run early to make sure MAIL_DOMAIN is not empty
 #
@@ -75,7 +77,7 @@ postfix_setup_domains() {
 	([ -n "$MYSQL_HOST" ] && [ -n "$MYSQL_DATABASE" ] && [ -n "$MYSQL_QUERY_USER" ])); then
 		dc_log 5 "[postfix] Configuring for domains $domains"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
-			> $POSTFIX_VIRT_DOMAIN
+			postfix_backup_file $POSTFIX_VIRT_DOMAIN
 			for domain in $domains; do
 				echo "$domain #domain" >> $POSTFIX_VIRT_DOMAIN
 			done
@@ -115,7 +117,7 @@ postfix_setup_mailbox_lmdb() {
 	local mboxmaps="${1-$MAIL_BOXES}"
 	if [ -n "$mboxmaps" ]; then
 		dc_log 5 "[postfix] Configuring virtual mailboxes."
-		> $POSTFIX_VIRT_MAILBOX
+		postfix_backup_file $POSTFIX_VIRT_MAILBOX
 		for mboxmap in $mboxmaps; do
 			echo "$mboxmap" | sed '/:/!s/.*/& &/g;s/:/ /g' >> $POSTFIX_VIRT_MAILBOX
 			for mboxbase in $(echo "$mboxmap" | sed '/:/!d;s/^.*://g;/\//!d;s/\/[^/]*\/*$//g'); do
@@ -137,7 +139,7 @@ postfix_setup_alias_lmdb() {
 	local aliasmaps="${1-$MAIL_ALIASES}"
 	if [ -n "$aliasmaps" ]; then
 		dc_log 5 "[postfix] Configuring virtual aliases."
-		> $POSTFIX_VIRT_ALIASES
+		postfix_backup_file $POSTFIX_VIRT_ALIASES
 		for aliasmap in $aliasmaps; do
 			echo "$aliasmap" | sed 's/:/ /g;s/[,]/& /g' >> $POSTFIX_VIRT_ALIASES
 		done
