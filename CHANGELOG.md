@@ -1,3 +1,8 @@
+# 1.5.3
+
+- [postfix](src/postfix) Old `MAIL_DOMAIN`, `MAIL_BOXES` and `MAIL_ALIASES` entries was not cleared when issuing `FORCE_CONFIG`. Fixed now.
+- [dovecot](src/dovecot) Old `SMTPD_SASL_CLIENTAUTH` entries was not cleared when issuing `FORCE_CONFIG`. Fixed now.
+
 # 1.5.2
 
 - [postfix](src/postfix) Fixed `MAIL_ALIASES` bug, due to, we now use virtual so table format is: pattern address, address.

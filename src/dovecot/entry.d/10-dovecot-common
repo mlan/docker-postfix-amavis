@@ -127,7 +127,7 @@ dovecot_setup_auth_file() {
 		!cat
 		# create client passwd file used for authentication
 		for entry in $clientauth; do
-			dc_cond_append $DOCKER_IMAP_PASSDB_FILE $entry
+			echo $entry >> $DOCKER_IMAP_PASSDB_FILE
 		done
 	fi
 }

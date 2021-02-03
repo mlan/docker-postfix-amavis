@@ -75,8 +75,9 @@ postfix_setup_domains() {
 	([ -n "$MYSQL_HOST" ] && [ -n "$MYSQL_DATABASE" ] && [ -n "$MYSQL_QUERY_USER" ])); then
 		dc_log 5 "[postfix] Configuring for domains $domains"
 		if [ $(echo $domains | wc -w) -gt 1 ]; then
+			> $POSTFIX_VIRT_DOMAIN
 			for domain in $domains; do
-				dc_cond_append $POSTFIX_VIRT_DOMAIN "$domain #domain"
+				echo "$domain #domain" >> $POSTFIX_VIRT_DOMAIN
 			done
 			postmap  lmdb:$POSTFIX_VIRT_DOMAIN
 			postconf virtual_mailbox_domains=lmdb:$POSTFIX_VIRT_DOMAIN
@@ -114,8 +115,9 @@ postfix_setup_mailbox_lmdb() {
 	local mboxmaps="${1-$MAIL_BOXES}"
 	if [ -n "$mboxmaps" ]; then
 		dc_log 5 "[postfix] Configuring virtual mailboxes."
+		> $POSTFIX_VIRT_MAILBOX
 		for mboxmap in $mboxmaps; do
-			dc_cond_append $POSTFIX_VIRT_MAILBOX $(echo "$mboxmap" | sed '/:/!s/.*/& &/g;s/:/ /g')
+			echo "$mboxmap" | sed '/:/!s/.*/& &/g;s/:/ /g' >> $POSTFIX_VIRT_MAILBOX
 			for mboxbase in $(echo "$mboxmap" | sed '/:/!d;s/^.*://g;/\//!d;s/\/[^/]*\/*$//g'); do
 				mkdir -p ${DOCKER_MAIL_LIB}/${mboxbase}
 				chown -LR ${DOCKER_APPL_RUNAS}: ${DOCKER_MAIL_LIB}
@@ -135,8 +137,9 @@ postfix_setup_alias_lmdb() {
 	local aliasmaps="${1-$MAIL_ALIASES}"
 	if [ -n "$aliasmaps" ]; then
 		dc_log 5 "[postfix] Configuring virtual aliases."
+		> $POSTFIX_VIRT_ALIASES
 		for aliasmap in $aliasmaps; do
-			dc_cond_append $POSTFIX_VIRT_ALIASES $(echo "$aliasmap" | sed 's/:/ /g;s/[,]/& /g')
+			echo "$aliasmap" | sed 's/:/ /g;s/[,]/& /g' >> $POSTFIX_VIRT_ALIASES
 		done
 		postmap lmdb:$POSTFIX_VIRT_ALIASES
 		postconf virtual_lmdb_alias_maps=lmdb:$POSTFIX_VIRT_ALIASES
