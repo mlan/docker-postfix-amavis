@@ -1,5 +1,37 @@
 # Road map
 
+## Databases
+
+Alpine has depreciated Berkeley DB which SpamAssassin uses for Bayes.
+So we switch to BDB, which still is supported.
+
+Use BDB for BayesStorage in `/etc/mail/spamassassin/local.cf`
+
+```yml
+bayes_store_module Mail::SpamAssassin::BayesStore::BDB
+```
+
+Overview of database options.
+
+|            | Bayes       | Quarantine  |
+| ---------- | ----------- | ----------- |
+| DB_File    | depreciated | N           |
+| BDB        | depreciated | depreciated |
+| SQLite     | bayeslite?  | Y           |
+| PostgreSQL | Y           | Y           |
+| MySQL      | Y           | Y           |
+| Redis      | Y           | Y           |
+
+Long term we should suppor keeping these databases in [SQL](https://svn.apache.org/repos/asf/spamassassin/trunk/sql/README.bayes) or perhaps Redis?
+
+## PostSRSd
+
+Arrange optional configuration of the [PostSRSd](https://github.com/roehling/postsrsd) Sender Rewriting Scheme (SRS) via TCP-based lookup tables for Postfix.
+
+```sh
+dd if=/dev/urandom bs=18 count=1 | base64 > /etc/postsrsd/postsrsd.secret
+```
+
 ## ACME
 
 Don't make DOCKER_ACME_SSL_DIR=/etc/ssl/acme persistent. We will remove all old certs and keys on updates anyway.
@@ -80,3 +112,7 @@ $bad_header_quarantine_method = 'sql:';
 # You can set it to 1 (the default) to test if Amavis is filling correctly the tables maddr, msgs, and msgcrpt
 $sql_store_info_for_all_msgs = 0;
 ```
+
+## Spamassassin MySQL Bayes Store
+
+[Fighting Spam/Viruses with Amavis and Postfix](https://www.akadia.com/services/postfix_amavisd.html)

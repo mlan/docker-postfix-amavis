@@ -84,6 +84,7 @@ RUN	source docker-common.sh \
 	postfix \
 	postfix-ldap \
 	postfix-mysql \
+	postsrsd \
 #	cyrus-sasl-plain \ # moved back into libsasl
 	cyrus-sasl-login \
 	&& cp -rlL $DOCKER_CONF_DIR $DOCKER_DIST_DIR \
@@ -206,6 +207,7 @@ RUN	apk --no-cache --update add \
 	&& dc_uncommentsection $DOCKER_MILT_FILE "# ### http://www.clamav.net/" \
 	&& dc_replace  $DOCKER_MILT_FILE /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
 	&& dc_modify   $DOCKER_MILT_FILE '\$pid_file' = '"/run/amavis/amavisd.pid";' \
+	&& dc_addafter $DOCKER_SPAM_FILE 'use_bayes' 'bayes_store_module Mail::SpamAssassin::BayesStore::BDB' \
 	&& dc_addafter $DOCKER_SPAM_FILE 'lock_method' 'use_razor2 1' \
 	&& mkdir /run/amavis && chown $DOCKER_MILT_RUNAS: /run/amavis \
 	&& mkdir /run/clamav && chown $DOCKER_AV_RUNAS: /run/clamav \

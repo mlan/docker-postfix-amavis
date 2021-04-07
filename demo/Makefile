@@ -216,8 +216,14 @@ auth-gui-down:
 
 mta-init:
 
-mta-bayes:
+mta-init_bayes:
 	docker-compose exec mta sh -c 'rm -f bayesian.database.gz && wget http://artinvoice.hu/spams/bayesian.database.gz && gunzip bayesian.database.gz && sa-learn --restore bayesian.database && chown -R amavis: /var/amavis/.spamassassin && rm -rf bayesian.database'
+
+mta-show_bayes:
+	docker-compose exec mta sa-learn --dump magic \
+	| sed -r 's/[^ ]+\s+[^ ]+\s+([^ ]+).*non-token data: (.*)/\1\@\2/g' \
+	| sed -r '/atime/s/(.*)@(.*)/echo $$(date --date=@\1 +%Y%b%d-%T)@\2/eg' \
+	| column -t -s @
 
 mta-test_smtp:
 	printf "From: A tester <test@example.biz>\nTo: <$(AD_USR_CN)@$(MAIL_DOMAIN)>\nDate: $$(date)\nSubject: A SMTP test message\n\nGreat news! You can receive email.\n" \
@@ -249,7 +255,7 @@ mta-razor:
 	docker-compose exec mta run amavis_register_razor
 
 mta-apk_list:
-	docker-compose exec mta /bin/sh -c 'for pkg in $$(apk info 2>/dev/null); do printf "%9s  %s\n" $$(apk info -s $$pkg 2>/dev/null | sed -n "2{p;q}") $$pkg; done | sort'
+	docker-compose exec mta /bin/sh -c 'for pkg in $$(apk info 2>/dev/null); do printf "%9s %3s %s\n" $$(apk info -s $$pkg 2>/dev/null | sed -n "2{p;q}") $$pkg; done | sort | sort -k 2,2'
 
 mta-quarantine_list:
 	docker-compose exec mta amavis-ls
@@ -291,7 +297,7 @@ mta-test_imap: mta-hostaddr
 	-u $(AD_USR_CN):$(AD_USR_PW)
 
 mta-man:
-	docker-compose exec mta apk --no-cache --update add man-db man-pages \
+	docker-compose exec mta apk --no-cache --update add man-db man-pages apk-tools-doc \
 	postfix-doc cyrus-sasl-doc dovecot-doc spamassassin-doc clamav-doc razor-doc
 
 db-init:

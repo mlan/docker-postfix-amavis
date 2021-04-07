@@ -101,7 +101,7 @@ services:
       - /etc/localtime:/etc/localtime:ro        # Use host timezone
 
   auth:
-    image: mlan/openldap:2
+    image: mlan/openldap
     networks:
       - backend
     command: --root-cn ${AD_ROOT_CN-admin} --root-pw ${AD_ROOT_PW-secret}

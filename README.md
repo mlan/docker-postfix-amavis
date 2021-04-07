@@ -14,6 +14,7 @@ This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](h
 - MTA (SMTP) server and client [Postfix](http://www.postfix.org/)
 - [Anti-spam](#incoming-anti-spam-and-anti-virus) filter [amavis](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [Razor](http://razor.sourceforge.net/)
 - [Anti-virus](#incoming-anti-spam-and-anti-virus) [ClamAV](https://www.clamav.net/)
+- [PostSRSd](#forwarding-rewrite), sender rewriting scheme
 - Sender authentication using [SPF](#incoming-spf-sender-authentication) and [DKIM](#dkim-sender-authentication)
 - [SMTP client authentication](#incoming-smtps-and-submission-client-authentication) on the SMTPS (port 465) and submission (port 587) using [Dovecot](https://www.dovecot.org/)
 - Hooks for integrating [Let’s Encrypt](#lets-encrypt-lts-certificates-using-traefik) LTS certificates using the reverse proxy [Traefik](https://docs.traefik.io/)
@@ -266,6 +267,10 @@ mail without TLS encryption, by setting `SMTP_TLS_SECURITY_LEVEL=encrypt`. Defau
 
 To configure the Postfix SMTP client connecting using the legacy SMTPS protocol instead of using the STARTTLS command, set `SMTP_TLS_WRAPPERMODE=yes`. This mode requires `SMTP_TLS_SECURITY_LEVEL=encrypt` or stronger. Default: `SMTP_TLS_WRAPPERMODE=no`
 
+## Forwarding rewrite
+
+[PostSRSd](https://github.com/roehling/postsrsd), implementing a sender rewriting scheme (SRS), offer optional forwarding rewrite to avoid receiving servers flagging messages as spam.
+
 ## Incoming SMTPS and submission client authentication
 
 Postfix achieves client authentication using SASL provided by [Dovecot](https://dovecot.org/). Client authentication is the mechanism that is used on SMTP relay using SASL authentication, see the [`SMTP_RELAY_HOSTAUTH`](#smtp_relay_hostauth). Here the client authentication is arranged on the [smtps](https://en.wikipedia.org/wiki/SMTPS) port: 465 and [submission](https://en.wikipedia.org/wiki/Message_submission_agent) port: 587.
@@ -471,9 +476,9 @@ docker exec -it <container_name> amavisd genrsa /var/db/dkim/$MAIL_DOMAIN.$DKIM_
 
 ## Mailbox maps and authentication
 
-When Postfix receives an message it uses mailbox maps to lookup the recipient's mailbox-path/username. If successful the message is accepted. Whether what the lookup returns is used as a mailbox-path or a username depends on if the messages will be delivered to a local mailbox or is transported for delivery elsewhere. See [delivery transport and mail boxes](#delivery-transport-and-mail-boxes) for an overview on delivery methods.
+When Postfix receives an message it uses mailbox maps to lookup the recipient's mailbox-path/username. If successful the message is accepted. Whether what the lookup returns is used as a mailbox-path or a username depends on if the messages will be delivered to a local mailbox or is transported for delivery elsewhere. See [delivery transport and mail boxes](#delivery-transport-and-mail-boxes) for an overview on delivery methods.
 
-So one can imagine situations where Postfix is set up to lookup and pass on a username that is different from what dovecot is expecting when performing authentication. Using `DOVECOT_AUTH_USERNAME_FORMAT=%Ln` Dovecot can be made to drop the domain part, if present, from the supplied username, see [Dovecot core settings](https://doc.dovecot.org/settings/core/?highlight=auth_username_format) for details.
+So one can imagine situations where Postfix is set up to lookup and pass on a username that is different from what dovecot is expecting when performing authentication. Using `DOVECOT_AUTH_USERNAME_FORMAT=%Ln` Dovecot can be made to drop the domain part, if present, from the supplied username, see [Dovecot core settings](https://doc.dovecot.org/settings/core/?highlight=auth_username_format) for details.
 
 ## Table mailbox lookup
 
@@ -591,7 +596,7 @@ Example: `MYSQL_USER=admin`, `MYSQL_PASSWORD=secret`. These environment variable
 
 #### `MYSQL_QUERY_PASS`
 
-As mentioned in [incoming SMTPS and submission client authentication](#incoming-smtps-and-submission-client-authentication) Dovecot needs the `MYSQL_QUERY_PASS` to be defined to be able to lookup the user and password when performing authentication. The following would work with the `users` table shown above `MYSQL_QUERY_PASS="select password, userid as user from $(SQL_TAB) where userid = '%u'"`. See [Dovecot MySQL authentication](https://doc.dovecot.org/configuration_manual/authentication/sql/#mysql) for details.
+As mentioned in [incoming SMTPS and submission client authentication](#incoming-smtps-and-submission-client-authentication) Dovecot needs the `MYSQL_QUERY_PASS` to be defined to be able to lookup the user and password when performing authentication. The following would work with the `users` table shown above `MYSQL_QUERY_PASS="select password, userid as user from $(SQL_TAB) where userid = '%u'"`. See [Dovecot MySQL authentication](https://doc.dovecot.org/configuration_manual/authentication/sql/#mysql) for details.
 
 ## Rewrite recipient email address `REGEX_ALIAS`
 
@@ -607,7 +612,7 @@ The `mlan/postfix-amavis` image is designed primarily to work with companion sof
 
 The environment variable `VIRTUAL_TRANSPORT` specifies how messages will be transported for final delivery. Frequently the server taking final delivery listen to LMTP. Assuming it does so on port 2003 it is sufficient to set `VIRTUAL_TRANSPORT=lmtp:app:2003` to arrange the transport.
 
-If `VIRTUAL_TRANSPORT` is not defined local mail boxes will be managed by Postfix directly. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/user@example.com`. See [`MAIL_BOXES`](#mail-boxes) for details on mailbox paths.
+If `VIRTUAL_TRANSPORT` is not defined local mail boxes will be managed by Postfix directly. The local mail boxes will be created in the directory `/var/mail`. For example `/var/mail/user@example.com`. See [`MAIL_BOXES`](#mail-boxes) for details on mailbox paths.
 
 The `mlan/postfix-amavis` image include the [Dovecot, a secure IMAP server](https://dovecot.org/), which can also manage mail boxes. Setting `VIRTUAL_TRANSPORT=lmtp:unix:private/transport` will transport messages to dovecot which will arrange local mailboxes. The environment variable `DOVECOT_MAIL_LOCATION` can be used to set the [mailbox location template](https://doc.dovecot.org/configuration_manual/mail_location/). Since Dovecot serves both IMAP and POP3 these mailboxes can be accessed by remote mail clients if desired.
 
