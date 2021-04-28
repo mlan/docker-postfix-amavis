@@ -268,7 +268,7 @@ mta-clamdtop:
 
 mta-tools:
 	docker-compose exec mta apk --no-cache --update add \
-	nano less lsof htop openldap-clients bind-tools iputils strace
+	nano less lsof htop openldap-clients bind-tools iputils strace iproute2
 
 mta-htop: mta-tools
 	docker-compose exec mta htop

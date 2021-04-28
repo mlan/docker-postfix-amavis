@@ -10,6 +10,10 @@ postfix_apply_migrate_fixes() {
 	if [ -n "$MIGRATE_CONFIG" ]; then
 		for fix in ${MIGRATE_CONFIG/all/}; do # list all fixes here
 		case $fix in
+		1) # Make sure files on persistent storage has the right ownership
+			chown -R $DOCKER_MILT_RUNAS: ${DOCKER_PERSIST_DIR}$DOCKER_MILT_LIB
+			chown -R $DOCKER_AV_RUNAS: ${DOCKER_PERSIST_DIR}$DOCKER_AV_LIB
+		;;
 		*) fix= ;;
 		esac
 		if [ -n "$fix" ]; then

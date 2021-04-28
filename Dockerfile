@@ -206,6 +206,7 @@ RUN	apk --no-cache --update add \
 	&& dc_addafter $DOCKER_MILT_FILE '^$log_templ' '# $sa_debug = 0; # debug SpamAssassin' \
 	&& dc_uncommentsection $DOCKER_MILT_FILE "# ### http://www.clamav.net/" \
 	&& dc_replace  $DOCKER_MILT_FILE /var/run/clamav/clamd.sock /run/clamav/clamd.sock \
+	&& dc_modify   $DOCKER_MILT_FILE '\$unix_socketname' = '"/run/amavis/amavisd.sock";' \
 	&& dc_modify   $DOCKER_MILT_FILE '\$pid_file' = '"/run/amavis/amavisd.pid";' \
 	&& dc_addafter $DOCKER_SPAM_FILE 'use_bayes' 'bayes_store_module Mail::SpamAssassin::BayesStore::BDB' \
 	&& dc_addafter $DOCKER_SPAM_FILE 'lock_method' 'use_razor2 1' \

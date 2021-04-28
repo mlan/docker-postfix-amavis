@@ -1,3 +1,8 @@
+# 1.5.5
+
+- [amavis](src/amavis) for consitency move Unix socket here `/run/amavis/amavisd.sock`.
+- [postfix](src/postfix) `MIGRATE_CONFIG=1` make sure files on persistent storage has the right ownership.
+
 # 1.5.4
 
 - [amavis](src/amavis) _BREAKING!_ Now use `bayes_store_module Mail::SpamAssassin::BayesStore::BDB` (BerkeleyDB). In alpine:3.13 the package `perl-db_file` was [dropped](https://gitlab.alpinelinux.org/alpine/aports/-/issues/12580), preventing SpamAssassin from using the DBM (DB_File) database. To migrate a DBM database, use `mlan/postfix-amavis:1.4` and run `sa-learn --backup > /tmp/bayesian.database.bak` and then enable BDB and run `sa-learn --restore /tmp/bayesian.database.bak`.
