@@ -60,7 +60,7 @@ TST_SBUG ?= 0
 TST_STAG ?= -99
 
 AUT_NAME ?= $(TST_NAME)-auth
-AUT_IMG  ?= mlan/openldap:2
+AUT_IMG  ?= mlan/openldap
 AUT_FQDN ?= $(AUT_NAME).$(AD_DOM)
 AUT_VOL  ?=
 AUT_ENV  ?= $(NET_ENV) \
