@@ -63,21 +63,21 @@ services:
       - MESSAGE_SIZE_LIMIT=${MESSAGE_SIZE_LIMIT-25600000}
       - LDAP_HOST=auth
       - VIRTUAL_TRANSPORT=lmtp:app:2003
-      - SMTP_RELAY_HOSTAUTH=${SMTP_RELAY_HOSTAUTH-}
-      - SMTP_TLS_SECURITY_LEVEL=${SMTP_TLS_SECURITY_LEVEL-}
-      - SMTP_TLS_WRAPPERMODE=${SMTP_TLS_WRAPPERMODE-no}
+      - SMTP_RELAY_HOSTAUTH=${SMTP_RELAY_HOSTAUTH}
+      - SMTP_TLS_SECURITY_LEVEL=${SMTP_TLS_SECURITY_LEVEL}
+      - SMTP_TLS_WRAPPERMODE=${SMTP_TLS_WRAPPERMODE}
       - SMTPD_USE_TLS=yes
-      - LDAP_USER_BASE=ou=${AD_USR_OU-users},${AD_BASE-dc=example,dc=com}
-      - LDAP_QUERY_FILTER_USER=(&(objectclass=${AD_USR_OB-kopano-user})(mail=%s))
-      - LDAP_QUERY_FILTER_ALIAS=(&(objectclass=${AD_USR_OB-kopano-user})(kopanoAliases=%s))
+      - LDAP_USER_BASE=ou=${AD_USR_OU-users},${AD_BASE}
+      - LDAP_QUERY_FILTER_USER=(&(objectclass=${AD_USR_OB})(mail=%s))
+      - LDAP_QUERY_FILTER_ALIAS=(&(objectclass=${AD_USR_OB})(kopanoAliases=%s))
       - LDAP_QUERY_ATTRS_PASS=uid=user
-      - REGEX_ALIAS=${REGEX_ALIAS-}
-      - DKIM_SELECTOR=${DKIM_SELECTOR-default}
-      - SA_TAG_LEVEL_DEFLT=${SA_TAG_LEVEL_DEFLT-2.0}
-      - SA_DEBUG=${SA_DEBUG-0}
-      - SYSLOG_LEVEL=${SYSLOG_LEVEL-}
-      - LOG_LEVEL=${LOG_LEVEL-0}
-      - RAZOR_REGISTRATION=${RAZOR_REGISTRATION-}
+      - REGEX_ALIAS=${REGEX_ALIAS}
+      - DKIM_SELECTOR=${DKIM_SELECTOR}
+      - SA_TAG_LEVEL_DEFLT=${SA_TAG_LEVEL_DEFLT}
+      - SA_DEBUG=${SA_DEBUG}
+      - SYSLOG_LEVEL=${SYSLOG_LEVEL}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - RAZOR_REGISTRATION=${RAZOR_REGISTRATION}
     volumes:
       - mta:/srv
       - app-spam:/var/lib/kopano/spamd          # kopano-spamd integration
@@ -92,10 +92,10 @@ services:
       - backend
     environment:
       - LANG=C.UTF-8
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD-secret}
-      - MYSQL_DATABASE=${MYSQL_DATABASE-kopano}
-      - MYSQL_USER=${MYSQL_USER-kopano}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD-secret}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     volumes:
       - db:/var/lib/mysql
       - /etc/localtime:/etc/localtime:ro        # Use host timezone
@@ -104,10 +104,10 @@ services:
     image: mlan/openldap
     networks:
       - backend
-    command: --root-cn ${AD_ROOT_CN-admin} --root-pw ${AD_ROOT_PW-secret}
+    command: --root-cn ${AD_ROOT_CN} --root-pw ${AD_ROOT_PW}
     environment:
-      - LDAPBASE=${AD_BASE-dc=example,dc=com}
-      - LDAPDEBUG=${AD_DEBUG-parse}
+      - LDAPBASE=${AD_BASE}
+      - LDAPDEBUG=${AD_DEBUG}
     volumes:
       - auth:/srv
       - /etc/localtime:/etc/localtime:ro        # Use host timezone
