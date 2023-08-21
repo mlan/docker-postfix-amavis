@@ -1,3 +1,5 @@
+- [repo](README.md) :warning: Maintenance discontinued.
+
 # 1.5.5
 
 - [amavis](src/amavis) for consitency move Unix socket here `/run/amavis/amavisd.sock`.

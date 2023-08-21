@@ -9,6 +9,15 @@
 
 This (non official) repository provides dockerized (MTA) [Mail Transfer Agent](https://en.wikipedia.org/wiki/Message_transfer_agent) (SMTP) service using [Postfix](http://www.postfix.org/) and [Dovecot](https://www.dovecot.org/) with [anti-spam](https://en.wikipedia.org/wiki/Anti-spam_techniques) and anti-virus filter using [amavis](https://www.amavis.org/), [SpamAssassin](https://spamassassin.apache.org/) and [ClamAV](https://www.clamav.net/), which also provides sender authentication using [SPF](https://en.wikipedia.org/wiki/Sender_Policy_Framework) and [DKIM](https://en.wikipedia.org/wiki/DomainKeys_Identified_Mail).
 
+## :warning: Maintenance discontinued
+
+This repository is no longer maintained. The development effort is now focused on the images found in the [`mlan/postfix`](https://github.com/mlan/docker-postfix) and a [`mlan/rspamd`](https://github.com/mlan/docker-rspamd) repositories, which offer full functionality and more of what was offered here. The reason for moving away from this repository is twofold.
+
+Firstly, Amavis is growing old and issues with maintaining functionality has started to appear.
+Fortunately, Rspamd is a modern mail filter with built-in webinterface and under active development.
+
+Secondly, now in retrospect, there is little reason to keep the mail transfer agent (Postfix) and the mail filter (Amavis/Rspamd) in the same container. Since they can easily be separated are linked by a simple interface.
+
 ## Features
 
 - MTA (SMTP) server and client [Postfix](http://www.postfix.org/)
